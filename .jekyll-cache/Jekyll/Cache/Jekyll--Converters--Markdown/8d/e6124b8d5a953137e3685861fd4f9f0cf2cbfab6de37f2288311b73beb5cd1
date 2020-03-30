@@ -1,0 +1,127 @@
+I"�+<hr />
+
+<p>C++为了提高程序的健壮性以及可读性，引进了四种类型转换<strong>操作符</strong></p>
+<ul>
+  <li>static_cast</li>
+  <li>const_cast</li>
+  <li>reinterpret_cast</li>
+  <li>dynamic_cast</li>
+</ul>
+
+<h2 id="static_cast">static_cast</h2>
+
+<ul>
+  <li>对于基本数据类型(int, double, char, struct, enum..)，static_cast可以完全胜任
+    <div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span><span class="p">(</span><span class="mf">7.8</span><span class="n">f</span><span class="p">);</span>
+<span class="kt">char</span> <span class="n">c</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">char</span><span class="o">&gt;</span><span class="p">(</span><span class="mf">7.8</span><span class="n">f</span><span class="p">);</span>
+</code></pre></div>    </div>
+  </li>
+  <li>对于类类型，static_cast只能在有相互联系的类型中进行转换
+    <div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">A</span><span class="p">{};</span>
+<span class="k">class</span> <span class="nc">B</span> <span class="o">:</span> <span class="k">public</span> <span class="n">A</span><span class="p">{};</span>
+<span class="k">class</span> <span class="nc">C</span><span class="p">;</span>
+<span class="n">B</span> <span class="n">b</span><span class="p">;</span>
+<span class="n">C</span> <span class="n">c</span><span class="p">;</span>
+<span class="n">A</span> <span class="n">a1</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="n">A</span><span class="o">&gt;</span><span class="p">(</span><span class="n">b</span><span class="p">);</span> <span class="c1">// 正确</span>
+<span class="n">A</span> <span class="n">a2</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="n">A</span><span class="o">&gt;</span><span class="p">(</span><span class="n">c</span><span class="p">);</span> <span class="c1">// 错误</span>
+</code></pre></div>    </div>
+    <p>-对于包含常量属性的类型，static_cast只能完成顶层const的转换</p>
+    <ul>
+      <li>顶层const: 用于表示任何类型的对象是常量</li>
+      <li>底层const: 与指针和引用有关，如果指针或引用本身可以改变，但是所指对象不能改变就是底层const(<strong>难受</strong>)
+        <div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">int</span><span class="o">*</span> <span class="k">const</span> <span class="n">ptr1</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">int</span><span class="p">();</span> <span class="c1">// 顶层const</span>
+<span class="k">const</span> <span class="kt">int</span><span class="o">*</span> <span class="n">ptr2</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">int</span><span class="p">();</span> <span class="c1">// 底层const</span>
+<span class="k">const</span> <span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="c1">// 顶层const</span>
+<span class="kt">int</span> <span class="n">i1</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span><span class="p">(</span><span class="n">i</span><span class="p">);</span> <span class="c1">// 正确</span>
+<span class="kt">int</span><span class="o">*</span> <span class="n">a1</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">ptr1</span><span class="p">);</span>  <span class="c1">// 正确</span>
+<span class="kt">int</span><span class="o">*</span> <span class="n">a2</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">ptr2</span><span class="p">);</span>  <span class="c1">// 错误</span>
+</code></pre></div>        </div>
+        <h2 id="const_cast">const_cast</h2>
+        <p>const_cast只能改变对象的底层const<strong>(意味着只能对引用或指针操作)</strong>，不再赘述了，这个操作符就是为const而生的</p>
+        <div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">int</span><span class="o">*</span> <span class="k">const</span> <span class="n">ptr1</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">int</span><span class="p">();</span> <span class="c1">// 顶层const</span>
+<span class="k">const</span> <span class="kt">int</span><span class="o">*</span> <span class="n">ptr2</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">int</span><span class="p">();</span> <span class="c1">// 底层const</span>
+<span class="k">const</span> <span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="c1">// 顶层const</span>
+<span class="kt">int</span> <span class="n">i1</span> <span class="o">=</span> <span class="k">const_cast</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span><span class="p">(</span><span class="n">i</span><span class="p">);</span> <span class="c1">// 错误</span>
+<span class="kt">int</span><span class="o">*</span> <span class="n">a1</span> <span class="o">=</span> <span class="k">const_cast</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">ptr1</span><span class="p">);</span>  <span class="c1">// 错误</span>
+<span class="kt">int</span><span class="o">*</span> <span class="n">a2</span> <span class="o">=</span> <span class="k">const_cast</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">ptr2</span><span class="p">);</span>  <span class="c1">// 正确</span>
+</code></pre></div>        </div>
+        <h2 id="reinterpret_cast">reinterpret_cast</h2>
+        <p>计算机的世界只有0和1，reinterpret_cast的作用就是对运算对象进行较低层次上(二进制)上的重新解释</p>
+        <h2 id="dynamic_cast">dynamic_cast</h2>
+        <p>上述三个操作符都是在编译时候完成的，dynamic_cast是在运行时完成的</p>
+      </li>
+    </ul>
+  </li>
+  <li>只能用于父子类型且含有虚函数的指针或引用的强制类型转换</li>
+  <li>转换成功返回指向类的指针或引用，否则返回<strong>nullptr</strong>或者<strong>抛出异常</strong></li>
+</ul>
+
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">Base</span> <span class="p">{</span>
+<span class="nl">public:</span>
+	<span class="k">virtual</span> <span class="kt">void</span> <span class="n">func</span><span class="p">()</span> <span class="p">{}</span>
+<span class="p">};</span>
+<span class="k">class</span> <span class="nc">Derived</span> <span class="o">:</span> <span class="k">public</span> <span class="n">Base</span> <span class="p">{</span>
+<span class="nl">public:</span>
+	<span class="k">virtual</span> <span class="kt">void</span> <span class="n">func</span><span class="p">()</span> <span class="p">{}</span>
+<span class="p">};</span>
+
+<span class="kt">void</span> <span class="nf">func1</span><span class="p">(</span><span class="n">Base</span><span class="o">*</span> <span class="n">pb</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">Derived</span><span class="o">*</span> <span class="n">pd1</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="n">Derived</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">pb</span><span class="p">);</span>  
+    <span class="n">Derived</span><span class="o">*</span> <span class="n">pd2</span> <span class="o">=</span> <span class="k">dynamic_cast</span><span class="o">&lt;</span><span class="n">Derived</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">pb</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<ul>
+  <li>如果pb指向的是Derived对象，那么对pd1和pd2执行D类型的任何操作都是安全的</li>
+  <li>如果pb指向的是Base对象，那么当pd1操作Base类型的成员时就是不安全的，而pd2将返回一个nullptr</li>
+</ul>
+
+<hr />
+
+<h2 id="实际应用中的一个问题">实际应用中的一个问题</h2>
+
+<p>基于<a href="https://github.com/HaHaJeff/JNet">网络库项目</a>+<a href="https://github.com/protocolbuffers/protobuf">protobuf</a>开发一个基本的rpc模块，在自定义RpcMessage和protobuf提供的Message之间进行dynamic_cast类型转换后，发生core_dump</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>typedef std::shared_ptr&lt;Message&gt; MessagePtr;
+typedef std::shared_ptr&lt;RcpMessage&gt; RpcMessagePtr;
+
+void OnRpcMessage(const TcpConnPtr&amp; conn, const MessagePtr&amp; message){
+    messageCallback_(conn, dynamic_cast&lt;RcpMessagePtr&gt;(message));
+}
+</code></pre></div></div>
+
+<p>定位原因：</p>
+
+<p>shared_ptr经过dynamic_cast转型之后不会增加引用计数，所以在messageCallback_之后就会产生析构，在调用OnRpcMessage的函数中会产生shared_ptr的二次析构，于是core_dump</p>
+
+<p>解决方案:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>typedef std::shared_ptr&lt;Message&gt; MessagePtr;
+typedef std::shared_ptr&lt;RcpMessage&gt; RpcMessagePtr;
+
+void OnRpcMessage(const TcpConnPtr&amp; conn, const MessagePtr&amp; message){
+    messageCallback_(conn, dynamic_pointer_cast&lt;RcpMessagePtr&gt;(message));
+}
+</code></pre></div></div>
+
+<p>采用dynamic_pointer_cast解决</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>template&lt; class T, class U &gt; 
+std::shared_ptr&lt;T&gt; dynamic_pointer_cast( const std::shared_ptr&lt;U&gt;&amp; r ) noexcept
+{
+    if (auto p = dynamic_cast&lt;typename std::shared_ptr&lt;T&gt;::element_type*&gt;(r.get())) {
+        return std::shared_ptr&lt;T&gt;(r, p);
+    } else {
+        return std::shared_ptr&lt;T&gt;();
+    }
+}
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="参考">参考</h2>
+
+<p>[1]. <a href="https://en.cppreference.com/w/cpp/memory/shared_ptr/pointer_cast">cpp_reference_pointer_cast</a></p>
+
+<p>[2]. <a href="https://en.cppreference.com/w/cpp/language/dynamic_cast">cpp_reference_dynamic_cast</a></p>
+
+:ET

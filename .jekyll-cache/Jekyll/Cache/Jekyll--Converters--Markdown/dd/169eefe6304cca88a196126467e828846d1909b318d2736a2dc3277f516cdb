@@ -1,0 +1,506 @@
+I"�2
+<!--
+# Jekyll Group-By-Array 0.1.0
+# https://github.com/mushishi78/jekyll-group-by-array
+# © 2015 Max White <mushishi78@gmail.com>
+# MIT License
+-->
+
+<!-- Initialize -->
+
+<!-- Map -->
+
+<!-- Flatten -->
+
+<!-- Uniq -->
+
+<!-- If not equal to previous then it must be unique as sorted -->
+
+<!-- Push to group_names -->
+
+<!-- If not equal to previous then it must be unique as sorted -->
+
+<!-- If not equal to previous then it must be unique as sorted -->
+
+<!-- Push to group_names -->
+
+<!-- If not equal to previous then it must be unique as sorted -->
+
+<!-- If not equal to previous then it must be unique as sorted -->
+
+<!-- Push to group_names -->
+
+<!-- If not equal to previous then it must be unique as sorted -->
+
+<!-- Push to group_names -->
+
+<!-- If not equal to previous then it must be unique as sorted -->
+
+<!-- Push to group_names -->
+
+<!-- If not equal to previous then it must be unique as sorted -->
+
+<!-- Push to group_names -->
+
+<!-- If not equal to previous then it must be unique as sorted -->
+
+<!-- If not equal to previous then it must be unique as sorted -->
+
+<!-- Push to group_names -->
+
+<!-- If not equal to previous then it must be unique as sorted -->
+
+<!-- Push to group_names -->
+
+<!-- If not equal to previous then it must be unique as sorted -->
+
+<!-- Push to group_names -->
+
+<!-- If not equal to previous then it must be unique as sorted -->
+
+<!-- If not equal to previous then it must be unique as sorted -->
+
+<!-- If not equal to previous then it must be unique as sorted -->
+
+<!-- If not equal to previous then it must be unique as sorted -->
+
+<!-- If not equal to previous then it must be unique as sorted -->
+
+<!-- If not equal to previous then it must be unique as sorted -->
+
+<!-- Push to group_names -->
+
+<!-- group_items -->
+
+<!-- Collect if contains -->
+
+<!-- Push to group_items -->
+
+<!-- Collect if contains -->
+
+<!-- Push to group_items -->
+
+<!-- Collect if contains -->
+
+<!-- Push to group_items -->
+
+<!-- Collect if contains -->
+
+<!-- Push to group_items -->
+
+<!-- Collect if contains -->
+
+<!-- Push to group_items -->
+
+<!-- Collect if contains -->
+
+<!-- Push to group_items -->
+
+<!-- Collect if contains -->
+
+<!-- Push to group_items -->
+
+<!-- Collect if contains -->
+
+<!-- Push to group_items -->
+
+<!-- Collect if contains -->
+
+<!-- Push to group_items -->
+
+<!-- Collect if contains -->
+
+<!-- Push to group_items -->
+
+<h2 id="c" class="archive__subtitle">c++</h2>
+
+<div class="list__item">
+  <article class="archive__item" itemscope="" itemtype="http://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title" itemprop="headline">
+      
+        <a href="http://localhost:4000/%E7%BC%96%E7%A8%8B%E8%AF%AD%E8%A8%80/unique_ptr-vs-shared_ptr-in-deleter/" rel="permalink">deleter in smart-pointer
+</a>
+      
+    </h2>
+    
+    <p class="archive__item-excerpt" itemprop="description">
+
+unique_ptr声明
+template&lt;
+    class T,
+    class Deleter = std::default_delete&lt;T&gt;
+&gt; class unique_ptr;
+template &lt;
+    class T,
+    class Deleter...</p>
+  </article>
+</div>
+
+<div class="list__item">
+  <article class="archive__item" itemscope="" itemtype="http://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title" itemprop="headline">
+      
+        <a href="http://localhost:4000/%E7%BC%96%E7%A8%8B%E8%AF%AD%E8%A8%80/%E5%9B%9B%E7%A7%8D%E5%BC%BA%E5%88%B6%E7%B1%BB%E5%9E%8B%E8%BD%AC%E6%8D%A2/" rel="permalink">四种强制类型转换
+</a>
+      
+    </h2>
+    
+    <p class="archive__item-excerpt" itemprop="description">
+
+C++为了提高程序的健壮性以及可读性，引进了四种类型转换操作符
+
+  static_cast
+  const_cast
+  reinterpret_cast
+  dynamic_cast
+
+
+static_cast
+
+
+  对于基本数据类型(int, double, char, struct, enum..)...</p>
+  </article>
+</div>
+
+<h2 id="cahce" class="archive__subtitle">cahce</h2>
+
+<div class="list__item">
+  <article class="archive__item" itemscope="" itemtype="http://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title" itemprop="headline">
+      
+        <a href="http://localhost:4000/%E6%8A%80%E6%9C%AF/cache-coherence-memory-consistency/" rel="permalink">cache coherence和memory consistency
+</a>
+      
+    </h2>
+    
+    <p class="archive__item-excerpt" itemprop="description">
+
+consistency vs coherence
+SWMR(Single-Writer-Multiple-Reader) invariant确保 在同一时间对同一个内存地址，a)一个core可能写(读)这个地址，b)一个或多个core读这个地址，Data-value invariant确保对该内存位置的更新可...</p>
+  </article>
+</div>
+
+<div class="list__item">
+  <article class="archive__item" itemscope="" itemtype="http://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title" itemprop="headline">
+      
+        <a href="http://localhost:4000/%E6%8A%80%E6%9C%AF/cache/" rel="permalink">cache结构
+</a>
+      
+    </h2>
+    
+    <p class="archive__item-excerpt" itemprop="description">
+
+
+  
+    缓存存储结构
+
+    结构上，缓存由若干缓存块(cache line)构成。每个缓存块存储具有连续内存地址的若干个存储单元。
+
+    
+​						图1. 缓存块结构
+  
+
+
+假设cache大小为4K，每个cache块为16B，那么32bit物理地址如何完成映射呢？
+
+
+  
+    ...</p>
+  </article>
+</div>
+
+<h2 id="concurrent-program-c" class="archive__subtitle">concurrent program，C++</h2>
+
+<div class="list__item">
+  <article class="archive__item" itemscope="" itemtype="http://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title" itemprop="headline">
+      
+        <a href="http://localhost:4000/%E6%8A%80%E6%9C%AF/DCLP/" rel="permalink">singleton and double checked locking pattern
+</a>
+      
+    </h2>
+    
+    <p class="archive__item-excerpt" itemprop="description">
+
+Introduction
+
+问题
+
+Singleton
+
+​	单例模式的一种经典实现如下：
+
+class Singleton {
+public:
+	static Singleton* instance();
+	...
+private:
+	static Singleton* pInstancce;
+};
+
+Si...</p>
+  </article>
+</div>
+
+<h2 id="shared-ptr" class="archive__subtitle">shared_ptr</h2>
+
+<div class="list__item">
+  <article class="archive__item" itemscope="" itemtype="http://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title" itemprop="headline">
+      
+        <a href="http://localhost:4000/%E7%BC%96%E7%A8%8B%E8%AF%AD%E8%A8%80/unique_ptr-vs-shared_ptr-in-deleter/" rel="permalink">deleter in smart-pointer
+</a>
+      
+    </h2>
+    
+    <p class="archive__item-excerpt" itemprop="description">
+
+unique_ptr声明
+template&lt;
+    class T,
+    class Deleter = std::default_delete&lt;T&gt;
+&gt; class unique_ptr;
+template &lt;
+    class T,
+    class Deleter...</p>
+  </article>
+</div>
+
+<h2 id="unique-ptr" class="archive__subtitle">unique_ptr</h2>
+
+<div class="list__item">
+  <article class="archive__item" itemscope="" itemtype="http://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title" itemprop="headline">
+      
+        <a href="http://localhost:4000/%E7%BC%96%E7%A8%8B%E8%AF%AD%E8%A8%80/unique_ptr-vs-shared_ptr-in-deleter/" rel="permalink">deleter in smart-pointer
+</a>
+      
+    </h2>
+    
+    <p class="archive__item-excerpt" itemprop="description">
+
+unique_ptr声明
+template&lt;
+    class T,
+    class Deleter = std::default_delete&lt;T&gt;
+&gt; class unique_ptr;
+template &lt;
+    class T,
+    class Deleter...</p>
+  </article>
+</div>
+
+<h2 id="分布式系统" class="archive__subtitle">分布式系统</h2>
+
+<div class="list__item">
+  <article class="archive__item" itemscope="" itemtype="http://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title" itemprop="headline">
+      
+        <a href="http://localhost:4000/%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB/bigtable/" rel="permalink">BigTable论文阅读
+</a>
+      
+    </h2>
+    
+    <p class="archive__item-excerpt" itemprop="description">
+
+</p>
+  </article>
+</div>
+
+<div class="list__item">
+  <article class="archive__item" itemscope="" itemtype="http://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title" itemprop="headline">
+      
+        <a href="http://localhost:4000/%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB/gfs/" rel="permalink">gfs论文阅读
+</a>
+      
+    </h2>
+    
+    <p class="archive__item-excerpt" itemprop="description">
+
+google file system
+
+背景
+
+
+  系统存储一定数量的大文件
+  系统的工作负载主要由两种读操作组成：大规模的流式读取和小规模的随机读取
+    
+      大规模流式读取通常一次读取数百KB的数据，更常见的是一次读取1MB甚至更多的数据
+      小规模的随机读取通常是在文件某个随机的...</p>
+  </article>
+</div>
+
+<h2 id="强制类型转换" class="archive__subtitle">强制类型转换</h2>
+
+<div class="list__item">
+  <article class="archive__item" itemscope="" itemtype="http://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title" itemprop="headline">
+      
+        <a href="http://localhost:4000/%E7%BC%96%E7%A8%8B%E8%AF%AD%E8%A8%80/%E5%9B%9B%E7%A7%8D%E5%BC%BA%E5%88%B6%E7%B1%BB%E5%9E%8B%E8%BD%AC%E6%8D%A2/" rel="permalink">四种强制类型转换
+</a>
+      
+    </h2>
+    
+    <p class="archive__item-excerpt" itemprop="description">
+
+C++为了提高程序的健壮性以及可读性，引进了四种类型转换操作符
+
+  static_cast
+  const_cast
+  reinterpret_cast
+  dynamic_cast
+
+
+static_cast
+
+
+  对于基本数据类型(int, double, char, struct, enum..)...</p>
+  </article>
+</div>
+
+<h2 id="数据库" class="archive__subtitle">数据库</h2>
+
+<div class="list__item">
+  <article class="archive__item" itemscope="" itemtype="http://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title" itemprop="headline">
+      
+        <a href="http://localhost:4000/%E6%8A%80%E6%9C%AF/%E6%95%B0%E6%8D%AE%E5%BA%93ACID/" rel="permalink">数据库中的ACID
+</a>
+      
+    </h2>
+    
+    <p class="archive__item-excerpt" itemprop="description">
+
+</p>
+  </article>
+</div>
+
+<h2 id="论文阅读" class="archive__subtitle">论文阅读</h2>
+
+<div class="list__item">
+  <article class="archive__item" itemscope="" itemtype="http://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title" itemprop="headline">
+      
+        <a href="http://localhost:4000/%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB/percolator/" rel="permalink">percolator
+</a>
+      
+    </h2>
+    
+    <p class="archive__item-excerpt" itemprop="description">
+
+</p>
+  </article>
+</div>
+
+<div class="list__item">
+  <article class="archive__item" itemscope="" itemtype="http://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title" itemprop="headline">
+      
+        <a href="http://localhost:4000/%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB/spanner/" rel="permalink">spanner
+</a>
+      
+    </h2>
+    
+    <p class="archive__item-excerpt" itemprop="description">
+
+</p>
+  </article>
+</div>
+
+<div class="list__item">
+  <article class="archive__item" itemscope="" itemtype="http://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title" itemprop="headline">
+      
+        <a href="http://localhost:4000/%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB/raft/" rel="permalink">raft算法
+</a>
+      
+    </h2>
+    
+    <p class="archive__item-excerpt" itemprop="description">背景
+</p>
+  </article>
+</div>
+
+<div class="list__item">
+  <article class="archive__item" itemscope="" itemtype="http://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title" itemprop="headline">
+      
+        <a href="http://localhost:4000/%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB/isolation/" rel="permalink">A Critique of ANSI SQL Isolation Levels
+</a>
+      
+    </h2>
+    
+    <p class="archive__item-excerpt" itemprop="description">
+
+</p>
+  </article>
+</div>
+
+<div class="list__item">
+  <article class="archive__item" itemscope="" itemtype="http://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title" itemprop="headline">
+      
+        <a href="http://localhost:4000/%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB/transcation/" rel="permalink">事务
+</a>
+      
+    </h2>
+    
+    <p class="archive__item-excerpt" itemprop="description">
+
+</p>
+  </article>
+</div>
+
+<div class="list__item">
+  <article class="archive__item" itemscope="" itemtype="http://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title" itemprop="headline">
+      
+        <a href="http://localhost:4000/%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB/paxos/" rel="permalink">paxos算法
+</a>
+      
+    </h2>
+    
+    <p class="archive__item-excerpt" itemprop="description">
+
+</p>
+  </article>
+</div>
+
+<h2 id="读书笔记" class="archive__subtitle">读书笔记</h2>
+
+<div class="list__item">
+  <article class="archive__item" itemscope="" itemtype="http://schema.org/CreativeWork">
+    
+    <h2 class="archive__item-title" itemprop="headline">
+      
+        <a href="http://localhost:4000/%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/data-intensive-application-index/" rel="permalink">Designing Data-Intensive Applications——index
+</a>
+      
+    </h2>
+    
+    <p class="archive__item-excerpt" itemprop="description">
+
+</p>
+  </article>
+</div>
+
+:ET

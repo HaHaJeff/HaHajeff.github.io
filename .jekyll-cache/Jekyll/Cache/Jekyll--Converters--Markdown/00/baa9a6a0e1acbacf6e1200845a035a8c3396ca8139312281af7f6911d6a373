@@ -1,0 +1,217 @@
+I"l<hr />
+
+<ul>
+  <li>
+    <h2 id="缓存存储结构">缓存存储结构</h2>
+
+    <p>结构上，缓存由若干缓存块(<strong>cache line</strong>)构成。每个缓存块存储<strong>具有连续内存地址</strong>的若干个存储单元。</p>
+
+    <p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/cache/cpu-cache-entry.png" alt="" />
+​						图1. 缓存块结构</p>
+  </li>
+</ul>
+
+<p>假设cache大小为4K，每个cache块为16B，那么32bit物理地址如何完成映射呢？</p>
+
+<ul>
+  <li>
+    <p>物理地址低4bit作为<strong>block offset</strong>，因为每个cache块16B</p>
+  </li>
+  <li>
+    <p>4K大小cache，每个cache块为16B，那么需要256个cache块，也就是说物理地址的中间8bit用来做块<strong>index</strong></p>
+  </li>
+  <li>
+    <p>高20bit用来做<strong>tag</strong>，标识物理地址是否在cache中</p>
+
+    <p>参照<strong>深入理解计算机体系结构</strong></p>
+
+    <p>假设cache大小为8个字节，每一个cache line为2字节，那么一共有4行cache line。cache 地址是4位，那么划分地址</p>
+
+    <ul>
+      <li>tag = 1bit</li>
+      <li>index = 2bit</li>
+      <li>offset = 1bit</li>
+    </ul>
+
+    <table>
+      <thead>
+        <tr>
+          <th>地址</th>
+          <th>标记位</th>
+          <th>索引位</th>
+          <th>偏移位</th>
+          <th>块号</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>0</td>
+          <td>0</td>
+          <td>00</td>
+          <td>0</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td>1</td>
+          <td>0</td>
+          <td>00</td>
+          <td>1</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td>0</td>
+          <td>01</td>
+          <td>0</td>
+          <td>1</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td>0</td>
+          <td>01</td>
+          <td>1</td>
+          <td>1</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td>0</td>
+          <td>10</td>
+          <td>0</td>
+          <td>2</td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td>0</td>
+          <td>10</td>
+          <td>1</td>
+          <td>2</td>
+        </tr>
+        <tr>
+          <td>6</td>
+          <td>0</td>
+          <td>11</td>
+          <td>0</td>
+          <td>3</td>
+        </tr>
+        <tr>
+          <td>7</td>
+          <td>0</td>
+          <td>11</td>
+          <td>1</td>
+          <td>3</td>
+        </tr>
+        <tr>
+          <td>8</td>
+          <td>1</td>
+          <td>00</td>
+          <td>0</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td>9</td>
+          <td>1</td>
+          <td>00</td>
+          <td>1</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td>10</td>
+          <td>1</td>
+          <td>01</td>
+          <td>0</td>
+          <td>1</td>
+        </tr>
+        <tr>
+          <td>11</td>
+          <td>1</td>
+          <td>01</td>
+          <td>1</td>
+          <td> </td>
+        </tr>
+        <tr>
+          <td>12</td>
+          <td>1</td>
+          <td>10</td>
+          <td>0</td>
+          <td>2</td>
+        </tr>
+        <tr>
+          <td>13</td>
+          <td>1</td>
+          <td>10</td>
+          <td>1</td>
+          <td>2</td>
+        </tr>
+        <tr>
+          <td>14</td>
+          <td>1</td>
+          <td>11</td>
+          <td>0</td>
+          <td>3</td>
+        </tr>
+        <tr>
+          <td>15</td>
+          <td>1</td>
+          <td>11</td>
+          <td>1</td>
+          <td>3</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+</ul>
+
+<p>综上，缓存结构是由<strong>index+tag+offset组成的</strong>组成的，那么index和tag是使用虚拟地址还是使用物理地址呢？</p>
+
+<h2 id="虚缓存">虚缓存</h2>
+
+<p>采用虚缓存的好处是：仅仅在缓存失效时才进行地址翻译。由于缓存命中率很高，需要翻译的次数很少。</p>
+
+<p>存在的问题：</p>
+
+<ol>
+  <li>引入虚拟地址的一个重要原因是页面保护，以防止进程相互侵犯地址空间。这种保护是通过<strong>页表</strong>和<strong>TLB</strong>中的保护位实现的。</li>
+  <li>进程虚拟地址是相同的，在切换进程后会出现整个缓存都不再对应新进程的有效数据。如果前后两个进程使用相同的虚拟地址，那么会访问错误的cache，导致程序错误。解决方案：
+    <ol>
+      <li>进程切换后清空缓存，代价太高</li>
+      <li>使用进程PID组为缓存标签的一部分，以区分不同进程地址空间。（这个怎么做呢？在TAG中新增位置才能保存PID，那么是不是空间消耗又会增加）</li>
+    </ol>
+  </li>
+  <li>多个虚拟地址可能会映射到同一个物理页面(共享内存)，使用虚拟地址做标签可能导致一份数据在缓存中出现多份拷贝的情形。解决方案：
+    <ol>
+      <li>硬件反别名。当缓存载入目标数据时，确认缓存内没有缓存块的标签也是地址的别名。</li>
+      <li>页面着色。这种技术是由操作系统对页面别名做出限制，使指向同一页面的别名具有相同的低端地址。</li>
+    </ol>
+  </li>
+  <li>输入输出问题。由于输入输出系统通常只是用物理地址，虚缓存必须引入一种逆映射技术来实现虚拟地址到物理地址的转换。</li>
+</ol>
+
+<h2 id="实缓存">实缓存</h2>
+
+<p>采用实缓存的好处是：完全使用物理地址作为缓存块的tag以及index，保证了cache数据是正确的，不会出现虚缓存的数据安全问题。
+但是由于地址翻译需要发生在缓存访问之前，所以会更加频繁的访问TLB。（但是访问TLB的周期很短）
+<a href="https://zh.wikipedia.org/wiki/CPU%E7%BC%93%E5%AD%98">wiki</a>上列出了这么一种情况：在访问cache前需要对虚拟地址进行转换，然后在访问cache。假设在访问TLB时，对应表项失效，然后去页表中进行查找或触发一次中断，返回物理地址之后却发现数据已不再cache中。</p>
+
+<p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/cache/cpu-cahce-virtual.png" alt="" />
+									图2. 实缓存流程图</p>
+
+<h2 id="虚实结合">虚实结合</h2>
+
+<p>一个折中方案是同时使用<strong>虚索引</strong>+<strong>实标签</strong>。这种缓存利用了页面技术的一个特征，即虚拟地址和物理地址享有相同的页内偏移值。这样，可以使用页面偏移作为缓存索引，同时使用物理页号作为标签。这种混合方式的好处在于：既能有效消除诸如别名引用等用虚索引缓存的固有问题，又可以通过对TLB和缓存的并行访问来缩短流水延迟。</p>
+
+<p>这种技术的一个缺点是：在使用直接匹配缓存的前提下，缓存大小不能超过页面大小，就则页面偏移范围就不足以覆盖缓存索引范围</p>
+
+<p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/cache/cpu-cahce-virtual-phy.png" alt="" />
+								       图3. 虚实缓存流程图</p>
+
+<p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/cache/vipt.png" alt="" />
+一张更加清晰的图片，从上图中可以发现：</p>
+<ul>
+  <li>采用physical page作为tag，采用virtual offset作为index，不仅能够避免virtual address的aliasing(不同虚拟地址映射同一物理地址)问题，还能并行化进行tlb查询以及cache hit操作</li>
+</ul>
+
+<hr />
+
+<p>[1]. <a href="https://zh.wikipedia.org/wiki/CPU%E7%BC%93%E5%AD%98">wiki-cache-cn</a>
+[2]. <a href="https://cseweb.ucsd.edu/classes/fa10/cse240a/pdf/08/CSE240A-MBT-L18-VirtualMemory.ppt.pdf">virtual-memory</a></p>
+:ET

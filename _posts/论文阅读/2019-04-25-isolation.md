@@ -1,0 +1,152 @@
+---
+?layout: post
+title: A Critique of ANSI SQL Isolation Levels 
+category: 论文阅读
+tags: [论文阅读]
+keywords: SQL, Isolation levels
+---
+
+---
+
+
+并发执行中的事务会面临如下问题:
+
+## Dirty Read
+
+- A1: w1[x]...r2[x] (a1 and c2 in either order)
+
+- P1: w1[x]...r2[x] (a1 or c1 and a2 or c2 in any order)
+
+P1、A1下都可能发生脏读，A1包含于P1
+
+脏读是指在事务T2中读取到T1中未提交的数据，采用READ COMMITED可以避免脏读
+
+## Fuzzy Read
+
+- A2: r1[x]...w2[x]...c2...r1[x]...c1 (a1 and c2 in either order)
+
+- P2: r1[x]...w2[x] (a1 or c1 and a2 or c2 in any order)
+
+P2、A2下都可能发生冲突，A2包含于P2
+
+Fuzzy Read(non repeatable read)指事务T1在事务T2修改数据之后，再次读取该修改数据出现不一致现象，采用REPEATABLE READ可以避免Fuzzy Read
+
+## Phantom
+
+- A3: r1[P]...w2[y in P]...c2...r1[P]...c1 (a1 and c2 in either order)
+
+- P3: r1[P]...w2[y in P] (a1 or c1 and a2 or c2 in any order)
+
+P3、A3下都可能发生幻读，A3包含于P3
+
+Phantom指事务T1在条件P下进行读取操作，然后事务T2插入了一条满足P的数据，结果事务T1在次读取的时候发现数据多出了一条
+
+## Lost update
+
+- P4: r1[x]...w2[x]...w1[x]..c1
+- H4: r1[x=100] r2[x=100] w2[x=120] c2 w1[x=130] c1
+
+在RC下仍然可能发生
+
+## read screw
+
+- A5A: r1[x]..w2[x]...w2[y]...c2...r1[y] (c1 or a1)
+
+![read_screw](https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/isolation/read_screw.png)
+
+## write screw
+
+- A5B: r1[x]...r2[y]...w1[y]...w2[x] (c1 and c2 occur)
+
+![write_screw](https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/isolation/write_screw.png)
+
+# 隔离等级
+
+## 总览
+
+- **下表为论文[1]中提供**
+
+![table1](https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/isolation/table1.png)
+
+- **基于锁的实现**
+
+![table2](https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/isolation/table2.png)
+
+## Read uncommitted isolation
+
+允许脏读，也就是可能读取到其他会话中未提交事务修改的数据
+
+## Read committed isolation
+
+只能读取到已经提交的数据
+
+## Repeatable read isolation
+
+可重复读,每个事务的视图都是事务开始时候的视图
+
+### snapshot isolation
+
+Snapshot isolation可以保证在事务的执行过程中，看到的是一致的书库快照，换言之，事务T1可以看见在T1开始之前的所有已提交数据，这可以解决**read_screw**问题
+
+Snapshot isolation适合long-running，read-only queries场景
+
+## Serializable isolation
+
+完全串行化的读，每次读都需要获得表级共享锁，读写相互都会阻塞
+
+## SI实现
+
+采用MVCC方式实现
+
+![SI_IMP](https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/isolation/si_imp.png)
+
+- txid = 12首先select balance from accounts where id = 1，txid=12只能看见txid<=12的事务提交的数据
+- txid = 13 update accounts set balance+=100 where id = 1，相当于删除原始记录，然后创建新的纪录
+- txid = 13 update accounts set balance -= 100 where id = 2
+- txid = 12最后select balance from accounts where id = 2，只能读取到txid<=12的记录，所以获得balance=100
+
+**SI特性**
+
+1. 在每个事务的开始时，数据库列出所有其他正在运行的事务(尚未提交或终止)，即使事务随后提交，也会忽略这些事务的任何写操作
+2. aborted的事务的写将会被忽略
+3. 更高事务id的写操作将会被当前事务忽略，无论其是否提交
+4. 所有的其他写操作对应用程序的查询操作可见
+
+## 小结
+
+![table4](https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/isolation/table4.png)
+
+---
+
+1.  不可重复读和幻读的区别？
+
+   不可重复读和幻读确实有点相似。但不可重复读重点在于**update**和**delete**，而幻读的重点在于**insert**
+
+   如果使用锁机制来实现这两种隔离级别，在可重复读中，该sql第一次读到数据后，就将这些数据加锁，其他事务无法修改这些数据，这就实现了可重复读。**但是，这种方式无法阻止insert操作**，所以当事务A先读取了数据，事务B还是可以insert数据提交，这是事务A就会发现莫名其妙多了一条数据，这就是**幻读**，无法通过行锁来避免。需要Serializable隔离级别，读用读锁，写用写锁，读锁写锁互斥，这么做可以有效避免幻读、不可重复读、脏读等问题，但会极大降低数据库的并发能力。
+
+   **所以说：不可重复读和幻读最大的区别，就在于如何通过锁机制来解决它们产生的问题**
+
+2. 悲观所和乐观锁？
+
+   - 悲观所
+
+     正如其名，它指的是对数据被外界(包括系统当前的其他事务，以及来自外部系统的事务处理)修改持保守态度，因此，在整个数据处理过程中，将数据处于锁定状态。悲观锁的实现，往往依靠数据库提供的锁机制(也只有数据库层提供的锁机制才能真正保证数据访问的排他性，否则即使在本系统中实现了加锁机制，也无法保证外部兄不会修改数据)
+
+   - 乐观锁
+
+     乐观锁采取更加宽松的加锁机制。悲观锁大多数情况下依靠数据库的锁机制实现，以保证操作最大程度的独占性。但随之而来的就是数据库性能的大量开销，特别是对长事务而言，这样的开销无法承受。
+
+     而乐观锁机制在一定机制上解决了这个问题。乐观锁，大多是基于数据版本记录机制实现。何谓数据版本？即数据增加一个版本标识，在基于数据库表的版本解决方案中，一般是通过为数据库表增加一个"version"字段来实现。读取数据时，将此版本号一同读出，之后更新时，对此版本号加一。此时，将提交数据的版本数据于数据库对应记录的当前版本信息进行对比，如果提交的数据版本号大于数据库表当前版本后，则予以更新，否则认为是过期数据。
+
+     
+
+# 参考
+
+[1]. [A Critique of ANSI SQL Isolation Levels](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/tr-95-51.pdf) 
+
+[2]. [Innodb中的事务隔离级别和锁的关系- 美团技术团队](https://tech.meituan.com/2014/08/20/innodb-lock.html)
+
+[3]. [《A Critique of ANSI SQL Isolation Levels》论文实验](https://zhuanlan.zhihu.com/p/38334464)
+
+[4]. 《Designing Data-Intensive Applications》
+

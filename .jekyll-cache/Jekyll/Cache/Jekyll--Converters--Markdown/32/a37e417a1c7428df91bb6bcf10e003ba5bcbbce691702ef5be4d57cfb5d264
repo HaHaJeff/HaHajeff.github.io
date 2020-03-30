@@ -1,0 +1,143 @@
+I"�<hr />
+
+<h2 id="introduction">Introduction</h2>
+
+<h2 id="问题">问题</h2>
+
+<h2 id="singleton">Singleton</h2>
+
+<p>​	单例模式的一种经典实现如下：</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>class Singleton {
+public:
+	static Singleton* instance();
+	...
+private:
+	static Singleton* pInstancce;
+};
+
+Singleton* Singleton::pInstance = 0;
+
+Singleton* Singleeton::instance() {
+    if(pInstance == 0) {
+    	pInstance = new Singleton;
+    }
+    return pInstance;
+}
+</code></pre></div></div>
+
+<p>​	在单线程环境中，上述代码能够十分出色的完成任务。然而，在多线程环境中，则会出现问题：</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>if (pInstance == 0)  // thread A                 if (pInstance == 0) // thread B
+</code></pre></div></div>
+
+<p>​	thread A和thread B都能够顺利进入<strong>pInstance = new Singleton</strong>，因此，无法正确工作。</p>
+
+<p>​	方式1：<strong>锁的方式</strong>避免资源竞争问题：</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Singleton* Singleton::instance() {
+	Lock lock;
+    if(pInstance == 0) {
+    	pInstance = new Singleton;
+    }
+    return pInstance;
+}
+</code></pre></div></div>
+
+<p>​	上述代码虽然解决了问题，但是开销比较大，每次调用Singleton::instance()都需要<strong>lock unlock</strong>操作（<strong>然而只有第一次的Singleton::instance()调用是有效的</strong>）。于是出现了<strong>double checked locking patter</strong></p>
+
+<h2 id="dclp">DCLP</h2>
+
+<p>​	<strong>double checked locking pattern</strong>作为一种解决<strong>线程安全</strong>问题的经典模式，常常被用于<strong>singleton</strong>，经典示例代码如下：</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>class Singleton {
+public:
+	static Singleton* instance();
+	...
+private:
+	static Singleton* pInstancce;
+};
+
+Singleton* Singleton::pInstance = 0;
+
+Singleton* Singleeton::instance() {
+    if(pInstance == 0) {			// 1st test
+        Lock lock;
+        if (pInstance == 0) {		// 2st test
+            pInstance = new Singleton;
+        }
+    }
+    return pInstance;
+}
+</code></pre></div></div>
+
+<p>​	相比于方式1，本方式不需要每次都调用lock。</p>
+
+<ul>
+  <li>1st test：第一次判断<strong>pInstance==0</strong>是为了减少lock被调用的次数</li>
+  <li>2st test：第二次判断<strong>pInstance==0</strong>是为了线程安全，考虑，thread A完成了1st test（但是没有lock），thread B完成了1st test（没有lock），此时thread A继续执行new Singleton，如果没有2st test，thread B也将成功调用new Singleton，违反singleton模式定义</li>
+</ul>
+
+<h2 id="dclp和指令执行顺序">DCLP和指令执行顺序</h2>
+
+<p>​	然而，上述DCLP不是线程安全的，考虑如下指令：</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pInstance = new Singleton;
+</code></pre></div></div>
+
+<p>​	上述指令可以分为三步，如下：</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pInstance = 						//step3
+	operatro new(sizeof Singleton);	//step1
+	new (pInstance) Singleton;		//step2
+</code></pre></div></div>
+
+<ul>
+  <li>step1：分配保存Singleton对象的内存</li>
+  <li>step2：构造一个Singleton对象</li>
+  <li>step3：将pInstance指向该块已经完成构造内存</li>
+</ul>
+
+<p>​        通常来说，编译器不会将step2提前到step1执行。（因为构造函数可能会抛出异常，此时需要确保pInstance没有被修改，所以编译器为了保证程序的异常安全性，不会擅自改变指令顺序。然而，在某些条件下，这种指令乱序是存在的。）</p>
+
+<p>​	现在考虑如下场景：</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>threadA执行了step3和step1后线程挂起
+threadB执行，发现pInstance不为0，于是对pInsatence进行解引用操作
+</code></pre></div></div>
+
+<p>​	上述行为是未定义的，因为构造函数还没有被调用。</p>
+
+<h2 id="看似线程安全的dclp">看似线程安全的DCLP</h2>
+
+<p>​	DCLP之所不是线程安全的原因在于<strong>指令执行顺序</strong>，无法确定pInstance所指向内存空间是否可用，那么使用临时变量是否可以解决这个问题？代码如下：</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>class Singleton {
+public:
+	static Singleton* instance();
+	...
+private:
+	static Singleton* pInstancce;
+};
+
+Singleton* Singleton::pInstance = 0;
+
+Singleton* Singleeton::instance() {
+    if(pInstance == 0) {		
+        Lock lock;
+        if (pInstance == 0) {	
+        	Singleton* tmp = new Singleton;
+            pInstance = tmp;
+        }
+    }
+    return pInstance;
+}
+</code></pre></div></div>
+
+<p>​	答案是：<strong>不行</strong>。因为编译器分析代码后发现tmp是无用的，所以tmp变量会被移除。</p>
+
+<h2 id="参考">参考</h2>
+
+<p>[1] <a href="https://https://www.aristeia.com/Papers/DDJ_Jul_Aug_2004_revised.pdf">C++ and the Perils of Double-Checked Locking</a></p>
+
+:ET

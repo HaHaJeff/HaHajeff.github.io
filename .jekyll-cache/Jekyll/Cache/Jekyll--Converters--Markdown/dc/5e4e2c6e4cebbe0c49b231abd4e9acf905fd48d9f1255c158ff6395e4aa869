@@ -1,0 +1,103 @@
+I",!<hr />
+
+<h2 id="unique_ptr声明">unique_ptr声明</h2>
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">template</span><span class="o">&lt;</span>
+    <span class="k">class</span> <span class="nc">T</span><span class="p">,</span>
+    <span class="k">class</span> <span class="nc">Deleter</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">default_delete</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span>
+<span class="o">&gt;</span> <span class="k">class</span> <span class="nc">unique_ptr</span><span class="p">;</span>
+<span class="k">template</span> <span class="o">&lt;</span>
+    <span class="k">class</span> <span class="nc">T</span><span class="p">,</span>
+    <span class="k">class</span> <span class="nc">Deleter</span>
+<span class="o">&gt;</span> <span class="k">class</span> <span class="nc">unique_ptr</span><span class="o">&lt;</span><span class="n">T</span><span class="p">[],</span> <span class="n">Deleter</span><span class="o">&gt;</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="shared_ptr声明">shared_ptr声明</h2>
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">template</span><span class="o">&lt;</span> <span class="k">class</span> <span class="nc">T</span> <span class="o">&gt;</span> <span class="k">class</span> <span class="nc">shared_ptr</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="两者的区别">两者的区别</h2>
+<ul>
+  <li>unique_ptr在编译时绑定删除器，所以改变deleter对于unique_ptr是一件困难的事情。</li>
+  <li>shared_ptr在运行时绑定删除器，且shared_ptr不是将deleter保存为一个成员，因为删除器的类型直到运行时才知道。</li>
+</ul>
+
+<h2 id="副作用">副作用</h2>
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">template</span><span class="o">&lt;</span><span class="k">class</span> <span class="nc">Deleter</span><span class="p">,</span> <span class="k">class</span> <span class="nc">T</span><span class="o">&gt;</span>
+<span class="n">Deleter</span><span class="o">&amp;</span> <span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">T</span><span class="p">,</span> <span class="n">Deleter</span><span class="o">&gt;::</span><span class="n">get_deleter</span><span class="p">();</span>
+
+<span class="k">template</span><span class="o">&lt;</span><span class="k">class</span> <span class="nc">Deleter</span><span class="p">,</span> <span class="k">class</span> <span class="nc">T</span><span class="o">&gt;</span>
+<span class="n">Deleter</span><span class="o">*</span> <span class="nf">get_deleter</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;&amp;</span> <span class="n">p</span><span class="p">);</span>
+</code></pre></div></div>
+<ul>
+  <li>get_deleter可以作为unique_ptr的成员函数</li>
+  <li>get_deleter不能作为shared_ptr的成员函数</li>
+</ul>
+
+<h2 id="使用上的区别">使用上的区别</h2>
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">Base</span> <span class="p">{</span>
+  <span class="nl">public:</span>
+  	<span class="n">Base</span><span class="p">()</span> <span class="p">{</span><span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">"Base()"</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;}</span>
+    <span class="o">~</span><span class="n">Base</span><span class="p">()</span> <span class="p">{</span><span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">"~Base()"</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;}</span>
+<span class="p">};</span>
+
+<span class="k">class</span> <span class="nc">Derived</span> <span class="o">:</span> <span class="k">public</span> <span class="n">Base</span> <span class="p">{</span>
+  <span class="nl">public:</span>
+  	<span class="n">Derived</span><span class="p">()</span> <span class="p">{</span><span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">"Derived()"</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;}</span>
+  	<span class="o">~</span><span class="n">Derived</span><span class="p">()</span> <span class="p">{</span><span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">"~Derived()"</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">}</span>
+<span class="p">};</span>
+
+<span class="kt">void</span> <span class="nf">fun1</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">Base</span><span class="o">&gt;</span> <span class="n">sb</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">make_shared</span><span class="o">&lt;</span><span class="n">Derived</span><span class="o">&gt;</span><span class="p">();</span>
+<span class="p">}</span>
+
+<span class="kt">void</span> <span class="nf">func2</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">Base</span><span class="o">&gt;</span> <span class="n">sb</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">make_shared</span><span class="o">&lt;</span><span class="n">Derived</span><span class="o">&gt;</span><span class="p">();</span>
+<span class="p">}</span>
+
+<span class="kt">int</span> <span class="nf">main</span><span class="p">()</span>
+<span class="p">{</span>
+    <span class="n">func1</span><span class="p">();</span>
+    <span class="n">func2</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p><strong>输出</strong></p>
+<ul>
+  <li>func1()
+    <ul>
+      <li>Base()</li>
+      <li>Derived()</li>
+      <li>~Derived()</li>
+      <li>~Base()</li>
+    </ul>
+  </li>
+  <li>func2()
+    <ul>
+      <li>Base()</li>
+      <li>Derived()</li>
+      <li>~Base()</li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="原因">原因</h2>
+
+<ul>
+  <li>unique_ptr的目的仅仅只是为了高效的管理指针，所以其deleter作为成员变量，这样在调用的时方便快捷，所以func2中直接将Base的析构函数作为了deleter</li>
+  <li>shared_ptr则是为了共享raw pointer，在它的control block中必然包含了pointer和refcount，只有当refcount为0的时候才调用deleter，所以shared_ptr的设计哲学是：既然调用次数不是很多那就不将deleter作为member了，所以在shared_ptr的refcount为0是，可能会发生：</li>
+</ul>
+
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">del</span> <span class="o">?</span> <span class="n">del</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="o">:</span> <span class="k">delete</span> <span class="n">p</span><span class="p">;</span>
+</code></pre></div></div>
+<p>上述代码的意思是：如果存在删除器，则调用删除器完成p的析构，否则直接delete p，在func1中，p为Derived类型</p>
+
+<h2 id="参考">参考</h2>
+
+<p>[1] <a href="https://stackoverflow.com/questions/27742290/deleter-type-in-unique-ptr-vs-shared-ptr">stackoverflow deleter-type-in-unique-ptr-vs-shared-ptr</a></p>
+
+<p>[2] <a href="https://en.cppreference.com/w/cpp/memory/unique_ptr">cppreference-unique-ptr</a></p>
+
+<p>[3] <a href="https://en.cppreference.com/w/cpp/memory/shared_ptr">cppreference-shared-ptr</a></p>
+
+<p>[4] c++ primer 第五版</p>
+
+:ET

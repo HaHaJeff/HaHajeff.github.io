@@ -1,0 +1,263 @@
+I"�8<h1 id="背景">背景</h1>
+
+<p>共识性算法是指允许一组机器在有机器无法提供服务时，仍能保证这组机器的一致性</p>
+
+<h1 id="raft算法流程">raft算法流程</h1>
+
+<ul>
+  <li>follower</li>
+  <li>candidater</li>
+  <li>leader</li>
+</ul>
+
+<p><strong>raft采用强leader保证算法的简洁性以及正确性</strong></p>
+
+<p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/raft/all.png" alt="" /></p>
+
+<h2 id="leader选举">leader选举</h2>
+
+<p><strong>raft使用心跳出发leader选举。当服务器启动时，初始化为follower。leader向followers周期性发送heartBeat。如果follower在选举超时时间内没有收到leader的heartBeat，就会等待一段随机的时间后发起一次leader选举</strong></p>
+
+<p>随机等待的目的是<strong>减少选举冲突</strong>。</p>
+
+<ul>
+  <li>只有包含最新<strong>commited log</strong>的candidater才能竞选成功，raft如何保证？
+    <ul>
+      <li>RequestVote会携带prevLogIndex以及prevLogTerm，其他节点在收到消息时：
+        <ul>
+          <li>如果发现自己的日志比请求中携带的更新，则拒绝投票。比较原则：如果本地的最后一条的log entry的term更大，则term大的更新。如果term一样大，则log index更大的更新</li>
+          <li>否则，同意该candidater的选举</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<p><strong>leader选举在raft中表现为RequestVote RPC，流程如下：</strong></p>
+
+<p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/raft/requestVoteRpc.png" alt="" /></p>
+
+<h2 id="日志复制">日志复制</h2>
+
+<p>leader把客户端请求作为日志条目，然后并行的向其他服务器发起AppendEntries RPC复制条目。当这条日志被复制到大多数服务器上时，leader将这条日志应用到它的状态机中，并向client返回结果。</p>
+
+<p>raft日志同步保证以下两点：</p>
+
+<ul>
+  <li>如果不同日志中的两个条目有着相同的索引号和任期号，则它们所存储的命令相同</li>
+  <li>如果不同日志中的两个条目有着相同的索引号和任期号，则它们之前的所有条目都是一样的</li>
+</ul>
+
+<p>第一特性源于leader在一个term内，在一个给定的log index最多创建一条日志条目，同时该条目在日志中的位置也从来不会改变</p>
+
+<p>第二条特性源于AppendEntries的一个简单的一致性检查。当发送一个AppendEntries RPC时，Leader会把新日志条目紧接着之前的条目的log index和term都包含在里面。如果Follower没有在它的日志中找到log index和term都相同的日志，它就会拒绝新的日志条目。</p>
+
+<ul>
+  <li>leader通过强制followers复制它的日志来处理日志的不一致，followers上的不一致的日志会被leader的日志覆盖。</li>
+  <li>leader为了使followers的日志同自己的一致，leader需要找到followers同它的日志一致的地方，然后覆盖followers在该位置之后的条目。</li>
+  <li>leader会从后往前尝试，每次AppendEntries失败后尝试前一个日志条目，直到成功找到每个follower的日志一致位点，然后向后覆盖</li>
+</ul>
+
+<p><strong>日志复制在raft中表现为AppendEntries RPC，流程如下：</strong></p>
+
+<p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/raft/appendVote.png" alt="" /></p>
+
+<h2 id="状态">状态</h2>
+<p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/raft/state.png" alt="" /></p>
+
+<ul>
+  <li>需要保存的状态：currentTerm，votedFor，log[]</li>
+  <li>需要变化的状态：commitIndex，lastApplied</li>
+  <li>在leader上变化的状态：nextIndex[]，matchIndex[]</li>
+</ul>
+
+<h2 id="安全性">安全性</h2>
+
+<ul>
+  <li>拥有最新的已提交的log entry的follower才能成为leader</li>
+  <li>leader只能推进commit index来提交当前term，旧term日志的提交要等到当前term的日志间接提交</li>
+</ul>
+
+<h1 id="client-interaction">Client interaction</h1>
+
+<h2 id="find-leader">find leader</h2>
+
+<ul>
+  <li>当client启动时，随机的连接一个server。如果该server不是leader，那么client的request将会被拒绝，同时得到server的response，该response中包含了最近一次的leader位置</li>
+  <li>client向leader发起连接，如果leader已经crash了，那么client的request将会超时，此时，client回到第一步</li>
+</ul>
+
+<h2 id="linearizable">linearizable</h2>
+
+<p><strong>定义：</strong>在线性一致性系统中，任何操作都能在调用和返回之间原子的执行完成</p>
+
+<ul>
+  <li>瞬间完成（原子性）</li>
+  <li>发生在invoke与response两个事件之中</li>
+  <li>反映出“最新值”</li>
+</ul>
+
+<p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/raft/linearizable.png" alt="" /></p>
+
+<p>上图满足线性一致</p>
+
+<ul>
+  <li>
+    <p>对于x，其初始值为1，客户端ABCD并发的进行请求</p>
+  </li>
+  <li>
+    <p>对于每个请求，线段表示处理request花费的时间，线性一致性没有规定request具体在线段上的哪个点执行，只需要在<strong>invode与response之间</strong>的某个时间点<strong>原子</strong>的执行完成</p>
+  </li>
+  <li>
+    <p>最新的值，从client B的角度看：</p>
+
+    <p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/raft/example_B.png" alt="" /></p>
+
+    <p>x的值分为三个阶段，在invoke w(2)和response之间对x的读取可能是1也可能是2，但是在response之后对x的读取一定是2</p>
+  </li>
+</ul>
+
+<h2 id="raft的线性一致">raft的线性一致</h2>
+
+<ul>
+  <li>
+    <p>对于write操作，leader会生成对应的op log，并将其序列化，以此顺序commit，并apply后返回client，当write被commit以后，raft保证其前面所有的write已经被commit。所以，所有的write操作都是严格有序的。综上，raft满足线性一致写</p>
+  </li>
+  <li>
+    <p>对于read操作，采用read log的方式一定是满足线性一致读的，但是这样的话有点小题大作（开销很大），因为read操作其实并不改变状态机</p>
+
+    <ul>
+      <li>
+        <p>使用<strong>read index</strong>减少开销，由于read log需要涉及到网络以及磁盘开销，采用read index可以减少磁盘开销，从而提升效率。具体实现方式：</p>
+
+        <ol>
+          <li>leader记录当前的commit index，称为read index</li>
+          <li>向follower发起以此心跳，证明自己还是leader  <strong>十分必要</strong></li>
+          <li>等待状态机<strong>至少</strong>应用到read index记录的log</li>
+          <li>执行read，将结果返回给client</li>
+        </ol>
+
+        <p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/raft/linearizable_leader_valid.png" alt="" /></p>
+
+        <p>第二点的必要性，考虑ABCDE5个节点</p>
+
+        <ol>
+          <li>刚开始的时候A作为leader对外提供服务</li>
+          <li>发生网络隔离，集群被分割成两部分，A和B以及CDE。虽然A会持续向其他几个节点发送heartbeat，但是由于网络隔离，CDE将无法收到A的heartbeat。默认的，A不处理向follower节点发送heartbeat失败(此处为网络超时)的情况(协议没有明确说明heartbeat是一个必须收到follower ack的双向过程)</li>
+          <li>CDE组成的分区在经过一定时间没有收到leader的heartbeat后，触发election timeout，此时C成为leader。此时，原来的5节点集群因网络分区分割成两个集群：小集群：A和B，A为leader；大集群：C、D和E，C为leader</li>
+          <li>第三点中的<strong>至少</strong>是关键要求，因为：read log可以保证线性一致性读，该请求发生的点为commit index，也就是说这个点能使read log满足线性一致，那显然发生在这个点之后的read index也能满足线性一致读</li>
+        </ol>
+      </li>
+      <li>
+        <p>使用<strong>lease read</strong>，lease read与read index类似，但更进一步，不仅省去了磁盘log，还省去了网络交互。它可以大幅度提升读的吞吐也能显著降低延时。</p>
+
+        <ul>
+          <li>基本思路：leader取一个比election time out更小的租期，在租期内不会发生选举，确保leader不会变，所以可以跳过read index的第二步，也就降低了延时。lease read的正确性和时间挂钩，因此时间的实现至关重要，如果漂移严重，这套机制就会有问题</li>
+        </ul>
+      </li>
+      <li>
+        <p><strong>wait free</strong>，lease read省去了read index的第二步，实际还能再进一步，省去第三步。这样的lease read在收到请求后立刻进行读请求，不取commit index也不等状态机。由于raft的强leader特性，在租期内的client收到的response由leader的状态机产生，所以只要状态机保证线性一致，那么在lease内，不管任何时候发生读都能满足线性一致。</p>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<hr />
+
+<ol>
+  <li>
+    <p>为什么wait-free可以满足线性一致性读？</p>
+
+    <ol>
+      <li>raft保证leader一定拥有最新的commit数据，但是leader的状态机数据不一定是最新的(例如，leader刚刚由follower转换为leader，其committed index之前的数据不一定应用到状态机中)</li>
+      <li>read log以及read index都是通过保证apply index &gt;= committed index，也就是说，保证在read log发生之前的committed index全部被应用到状态机即可，也就是说保证状态机即可保证read线性一致</li>
+      <li>leader拥有最新的committed index，那么只要leader中该term的第一条log被应用到状态机中就可以保证状态机最新了(后续的写操作一定是被apply之后才返回的，所以只要leader的第一条记录被应用到状态机中就能保证leader的状态机最新)</li>
+    </ol>
+  </li>
+  <li>
+    <p>raft如何保证leader拥有最新的日志？</p>
+    <ol>
+      <li>在RequestVote阶段保证只有最新的Candidate能够选举成功。
+        <ol>
+          <li>RequestVote会携带prevLogIndex以及prevLogTerm，其他节点在收到消息时：</li>
+          <li>如果发现自己的日志比请求中携带的更新，则拒绝投票。比较原则：如果本地的最后一条的log entry的term更大，则term大的更新。如果term一样大，则log index更大的更新</li>
+          <li>否则，同意该candidater的选举</li>
+        </ol>
+      </li>
+    </ol>
+  </li>
+</ol>
+
+<hr />
+
+<ol>
+  <li>Raft为了简洁性牺牲了什么？
+    <ol>
+      <li>raft为了简洁性放弃了部分性能
+        <ol>
+          <li>每一个操作必须在磁盘上进行持久化，通过batch优化</li>
+          <li>拒绝乱序提交，通过pipeline优化</li>
+          <li>server无法充分利用多核优势，因为必须顺序执行操作</li>
+        </ol>
+      </li>
+    </ol>
+  </li>
+  <li>raft如何优化？
+    <ol>
+      <li>首先确定raft的一次运行流程：
+        <ul>
+          <li>leader收到client发送的request</li>
+          <li>leader将request append到自己的本地log</li>
+          <li>leader将log entry发送给其他的follower</li>
+          <li>leader等待follower的结果，如果大多数follower提交了这个log entry，则leader对其进行apply</li>
+          <li>leader将结果返回给client</li>
+        </ul>
+      </li>
+      <li>batch优化
+        <ol>
+          <li>第四步apply log时，可以先缓存起来，然后一起进行apply，减少落盘影响</li>
+          <li>但是需要注意的是，如果已经向client返回了，但是leader突然宕掉，此时可能会导致数据丢失，所以需要进行redo，在leader重启时先恢复</li>
+        </ol>
+      </li>
+      <li>pipeline优化
+        <ol>
+          <li>batch优化依旧会导致leader需要等到follower返回时才能进行下一步工作，采用pipeline可以避免</li>
+          <li>leader会维护一个nextindex[]数组记录每一个follower的next log entry index，在等待follower返回后对数组进行更新，采用pipeline即是在leader发送完log entry后就更新nextindex数组，此时leader可以开始发送下一批log</li>
+          <li>pipeline存在的问题是：上一次的index返回失败，而这一次的index成功了可怎么办？<strong>leader会重新更新nextindex数组，同时重新发送log</strong></li>
+        </ol>
+      </li>
+      <li>
+        <p>Append log parallelly？</p>
+
+        <ol>
+          <li>对leader append操作和leader将log发送给其他的follower可以并行操作，原因是：当一个log被大多数节点append了，这条log entry就可以被认为是committed，committed的log entry一定可以被apply，所以即使leader宕机了，依旧能够保持正确性</li>
+          <li>leader在收到大多数follower的append成功之后就可以认定这个log entry被committed了，所以可以对apply操作进行异步</li>
+        </ol>
+      </li>
+      <li>raft和multipaxos的区别？
+        <ol>
+          <li>raft和multipaxos在选举完leader之后除以下差别外，其余基本一致：
+            <ol>
+              <li>raft仅允许日志最多的节点当选为leader，而multi-paxos则相反，任意节点都可以当选leader</li>
+              <li>raft不允许日志的空洞，这也是为了比较方便和拉平两个节点的日志方便，而multi-paxos则允许日志出现空洞，也就是说raft不允许乱序commit，而paxos允许乱序commit，但是两者都不允许乱序apply</li>
+            </ol>
+          </li>
+        </ol>
+      </li>
+      <li>
+        <h2 id="match_index与next_index">match_index与next_index？</h2>
+      </li>
+    </ol>
+  </li>
+</ol>
+
+<h1 id="参考">参考</h1>
+
+<p>[1]. <a href="https://raft.github.io/raft.pdf">In Search of an Understandable Consensus Algorithm</a></p>
+
+<p>[2]. <a href="https://www.youtube.com/watch?v=JEpsBg0AO6o&amp;t=182s">raft youtube</a></p>
+
+<p>[3]. <a href="https://zhengyinyong.com/etcd-linearizable-read-implementation.html">etcd线性一致性读</a></p>
+
+<p>[4]. <a href="https://pingcap.com/blog-cn/linearizability-and-raft/">线性一致性和raft</a></p>
+:ET

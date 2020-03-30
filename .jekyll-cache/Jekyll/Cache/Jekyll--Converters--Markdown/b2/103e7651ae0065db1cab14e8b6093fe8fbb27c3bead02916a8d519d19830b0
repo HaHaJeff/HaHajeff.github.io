@@ -1,0 +1,160 @@
+I"K <hr />
+
+<h1 id="acid">ACID</h1>
+
+<h2 id="atomicity">Atomicity</h2>
+
+<p>原子性是指一个事务是不可分割的工作单位，其中的操作要么都做，要么都不做。</p>
+
+<p>以银行转账为案列，要么转账成功，要么失败，不存在中间的状态，如果不保证原子性，那么A转账成功，扣款50元，B增加50元失败，系统无故丢失50元。</p>
+
+<p>数据库是如何保证原子性的？</p>
+
+<p>通过undo日志，即在操作执行前，先记录原先的记录状态。例如A账户本来有100元，B账户100元，在执行转账前前记录undo日志</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;T1, a, 100&gt;
+&lt;T1, b, 100&gt;
+</code></pre></div></div>
+
+<p>然后执行操作，假设A扣款成功，B增加失败，那么事务执行失败，需要回滚，均能得到正确的余额，保证了正确性。</p>
+
+<p>数据库中的原子性与并发变成中的原子性概念是不一样的：<strong>数据库中的原子性与并发无关</strong></p>
+
+<h2 id="isolation">Isolation</h2>
+
+<p>隔离性是指在并发执行事务的时候，不同事务之间互不干扰。</p>
+
+<p>依旧以银行转账为例，A账户余额100，B账户余额100，A向B发起两次转账，每次50，在两次事务中分别执行，如果不保证隔离性，可能会出现如下情况：</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>事务T1</th>
+      <th>事务T2</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>读取A账户余额为100</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>A账户执行转账操作，扣款50(提前做好undo日志)</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>更新A账户余额(A账户余额为50)</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>读取B账户余额为100</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>B账户执行增加余额操作，增加50(提前做好undo日志)</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td> </td>
+      <td>读取A账户余额为150</td>
+    </tr>
+    <tr>
+      <td> </td>
+      <td>A账户执行转账操作，扣款50(提前做好undo日志)</td>
+    </tr>
+    <tr>
+      <td> </td>
+      <td>更新A账户余额(A账户余额为0)</td>
+    </tr>
+    <tr>
+      <td> </td>
+      <td>读取B账户余额为100</td>
+    </tr>
+    <tr>
+      <td> </td>
+      <td>B账户执行增加余额操作，增加50(提前做好undo日志)</td>
+    </tr>
+    <tr>
+      <td> </td>
+      <td>更新B账户余额(B账户余额为150)</td>
+    </tr>
+    <tr>
+      <td>更新B账户余额(B账户余额为150)</td>
+      <td> </td>
+    </tr>
+  </tbody>
+</table>
+
+<p>A账户扣款两次成功，但是B账户却只完成一次入账操作，导致不一致。</p>
+
+<p>如何保证隔离性呢？</p>
+
+<p>通过上述操作发现，在T1和T2中都会公共资源进行读写操作，最简单的办法就是加排他锁(悲观锁)实现，当然这种方式效率是比较低下的，隔离性等级比较复杂，下回再议。</p>
+
+<h2 id="durability">Durability</h2>
+
+<p>持久性是指事务一旦提交，那么它对数据库的改变就是永久性的。</p>
+
+<p>还是银行转账案例，在更新A账户余额那一步需要将内存中的变更操作持久化到磁盘，也就是说在提交事务之前一定要先将内存中的修改数据刷新到磁盘，如果不刷入磁盘，那么可能面临一个问题，事务提交成功，但是内存中数据失效了，却又没有持久化到磁盘，所以出现数据丢失。但是这种方式的效率会很低下，因为刷盘的单位是page，尽管只修改了一个byte，也需要刷入一个page。</p>
+
+<p>如何解决持久性问题？</p>
+
+<p>采用redo log解决上面的问题，当数据修改的时候，不仅仅在内存中修改，还会在redo log中记录变更操作。在事务提交的时候强制redo log提交，这样保证事务恢复的时候能够将没有刷入磁盘中的内存数据进行重建。</p>
+
+<h2 id="consistency">consistency</h2>
+
+<p>consistency指的是数据的正确性约束，数据库无法定义consistency，consistency由用户定义
+例如，银行的转账系统。你转账是总是需要保证收支平衡的，但是数据库不会自动帮你保证，它只负责存储数据
+正确性保证需要用户执行</p>
+
+<h1 id="logging-failures-and-recovery-methods">Logging, Failures and Recovery Methods</h1>
+
+<p>事务并发执行时，如何保证事务的Atomicity以及Duration</p>
+
+<h1 id="隔离性级别的实现">隔离性级别的实现</h1>
+
+<h2 id="锁">锁</h2>
+
+<ul>
+  <li>共享锁：如果事务Ti获得了数据项Q上的<strong>共享型锁</strong>，则Ti可读但不能写Q</li>
+  <li>排他锁：如果事务Ti获得了数据项Q上的<strong>排他型锁</strong>，则Ti即可读又可写Q</li>
+</ul>
+
+<h2 id="时间戳">时间戳</h2>
+
+<h2 id="多版本和快照隔离">多版本和快照隔离</h2>
+
+<h2 id="steal-force-redo-undo">steal force redo undo</h2>
+
+<p>数据库的缓存刷新策略与redo undo的关系</p>
+
+<p>为了保证数据库的Atomicity和Durability，数据库会首先把数据的更新记录在日志中 ，再写数据，最后提交。在事务提交时，日志必须要写入稳定存储的（WAL），但是数据是不一定在事务提交完成写入的，所以就出现了Crash Recovery来保证AD特性。</p>
+
+<p>在事务提交时，将数据写入稳定存储，这种策略称之为<strong>force</strong>刷新策略，然而，采用这种策略会严重影响性能(会产生很多小的磁盘随机IO和写放大)。所以，大部分实现采用的是<strong>no force</strong>策略，但是采用这种策略需要注意的如果事务已经提交，但是数据没有被刷盘的时候发生宕机，此时需要将事务重做，也就是需要<strong>redo</strong>日志。与此对应，<strong>steal</strong>策略表示在事务提交前就写入磁盘，如果在事务提交以前出现宕机，那么事务就需要回滚，此时就需要<strong>undo</strong>日志。</p>
+
+<h2 id="crash-recovery">Crash Recovery</h2>
+
+<p>记录redo log和undo log可以基本满足AD特性，但是存在以下问题：</p>
+
+<ol>
+  <li>Crash Recovery过程中需要扫描整个<strong>redo/undo log</strong>，导致数据库恢复过程耗时太大。同时，<strong>redo/undo log</strong>会越积越多，浪费磁盘空间，虽然可以用checkpoint来解决，但是checkpoint时刻会强制刷盘(刷日志和脏页)、禁写，导致数据库的写停顿。</li>
+  <li>redo/undo log都是物理日志，这在某些情况下是有问题的。考虑修改索引B+树的例子。一个事务T1向B+树插入了一个key，假设这个key最终被插入到了page1中，为了A，T1会把page1的上老数据记录到undo log中。T1完成插入后(但是还未提交)，会释放page1上的锁(为了提高性能)，假设此时另一个事务T2也插入了一个key到page1中(因为page1上没有锁，所以可以插入成功，记录undo log)，如果此时T1回滚，那么T2的数据会被丢失。正确的解决这个问题：一是可以采用在事务提交前不释放锁，二是可以采用逻辑undo日志解决这个问题，即在undo log中不是记录page1的原始内容，而是记录一条delete语句。</li>
+</ol>
+
+<p><a href="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/transaction/steal_no_force.png"></a></p>
+
+<h1 id="问题">问题</h1>
+
+<p>Q1：serializable与linearizable的区别？</p>
+
+<p>A1：从定义上来说，serializable指的是<strong>让所有的事务从自身角度上去，好像所有的事务都是以某种顺序执行的一样，不一定满足全局时间顺序(针对的是事务隔离级别)</strong>；而Linearizable指的是<strong>某个对象执行写之后可以立刻读到这个最新之(读写顺序与全局时间一致)</strong></p>
+
+<hr />
+
+<h1 id="参考">参考</h1>
+
+<p>[1]. <a href="https://cs.stanford.edu/people/chrismre/cs345/rl/aries.pdf">A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging</a></p>
+
+<p>[2]. <a href="https://zhuanlan.zhihu.com/p/65281198">程序员，知道Mysql中ACID的原理吗？</a></p>
+
+:ET

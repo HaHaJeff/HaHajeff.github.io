@@ -1,0 +1,290 @@
+I"�9<hr />
+
+<h1 id="paxos">paxos</h1>
+
+<p>paxos作为一种分布式环境下的共识性算法，其目标是保证在多数派机器存活的情况下依旧能够维持数据的一致性，其与2pc等算法的区别在于：</p>
+
+<ul>
+  <li>2PC属于阻塞的且不容错的</li>
+  <li>paxos属于非阻塞且容错的</li>
+</ul>
+
+<p><strong>paxos核心</strong></p>
+
+<ul>
+  <li><strong>少数服从多数</strong></li>
+  <li><strong>后者服从前者</strong></li>
+</ul>
+
+<p><strong>paxos就是完成一个value的确定</strong>，在paxos里一个value的确定又叫选择(chosen)</p>
+
+<h2 id="共识算法的安全要求">共识算法的安全要求</h2>
+
+<ol>
+  <li>only a value that has been proposed may be chosen(只有被提出的value才能被选择)</li>
+  <li>only a single value is chosen(只有<strong>一个值</strong>被选择)</li>
+  <li>a process never learns that a value has been chosen unless it actually been chosen</li>
+</ol>
+
+<p>Paxos的目标：<strong>被提出的value最终会被选择，如果一个value已经被选择了，那么这个value最终将会被其他进程学习到</strong></p>
+
+<p>Paxos将分布式环境下的进程分为三个角色：</p>
+
+<ol>
+  <li>proposer  (propose proposal)</li>
+  <li>acceptor (accept proposal)</li>
+  <li>learner (learn chosen proposal)</li>
+</ol>
+
+<hr />
+
+<p><strong>Paxos如何定义一个value被选择了？</strong></p>
+
+<p>如果一个proposal已经被多数acceptor接受了，那么该proposal被选择</p>
+
+<h2 id="选择一个value">选择一个value</h2>
+
+<p>P1：acceptor must accept the first proposal that it receives(acceptor必须接受它收到的第
+一个proposal)</p>
+
+<p><strong>P1+value chosen特性要求acceptor必须接受不止一个proposal。</strong></p>
+
+<hr />
+
+<p>为什么acceptor需要接受不止一个proposal？</p>
+
+<p>如果多个proposer同时propose proposal，根据多数派要求，可能没有proposal能够被选择，违反了<strong>共识算法的安全要求</strong></p>
+
+<p>为了区别proposal，Paxos重新定义了proposal结构</p>
+
+<ul>
+  <li>proposal(proposal number, value)</li>
+  <li>proposal number全局唯一</li>
+</ul>
+
+<p>P1只是保证proposal能够被选择，但是没有保证value的唯一性</p>
+
+<p>Paxos允许多个proposal被选择，但是这些被选择的proposal的value字段都是一样的，这就保证了value唯一性</p>
+
+<p>P2： If a proposal with value v is chosen, then every higher-numbered proposal that is
+chosen has value v</p>
+
+<p>P2更加严格的保证了<strong>only a single value is chosen</strong></p>
+
+<p>proposal被选择的一个要求是：大多数acceptor接受了这个proposal，更泛化的说，至少有一个acceptor接受了这个proposal，所以出现了<strong>P2a</strong></p>
+
+<p>P2a：If a proposal with value v is chosen, then every higher-numbered proposal accepted
+by any acceptor has value v</p>
+
+<p>P2a仍然满足P1，仍然可以保证一些proposal会被选择，但是考虑如下场景：</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ABCDE五个acceptor，proposal(n, "red")被ABC接受了，所以proposal(n, "red")被选择了
+但是如果一个proposer重新发出proposal(n+1, "blue")仍然可以被DE接受，这是由于P1保证的，
+所以这与P2a矛盾
+</code></pre></div></div>
+
+<p>为了同时满足P2a和P1，出现了P2b</p>
+
+<p>P2b：If a proposal with value v is chosen, then every higher-numbered proposal issued by any proposer has value v</p>
+
+<p>一个proposal被acceptor接受之前，一定是先被proposer提出的，所以P2b隐含了P2a，同时隐含了P2</p>
+
+<p>P2b从结果上出发满足了共识算法的要求，只有一个value能够被选择</p>
+
+<p>P2c：For any v and n, if a proposal with value v and number n is issued, then there  is a set S consisting of a majority of acceptors such that either (a) no acceptor  in S has accepted any proposal numbered less than n, or (b) v is the value of the highest numbered proposal among all proposals numbered less than n accepted by the acceptors in S</p>
+
+<hr />
+
+<p>P2c其实是P2b的实现方式，那如何证明P2c一定满足P2b呢？</p>
+
+<p>对于任意的proposal(n, v)，一定存在一个多数派S：</p>
+
+<ol>
+  <li>在S中没有acceptor已经接受过小于n的提案</li>
+  <li>在S中存在acceptor接受过小于n的提案，但是提案n对应的v一定等于S中已经被接受提案号最大的提案对应的value</li>
+</ol>
+
+<p>证明对象：如果proposal(m, v)被选择了，在条件b下，提出一个proposal(n, v1)，证明v1=v</p>
+
+<ul>
+  <li>当n=m+1时，因为m对应的提案已经被选择，所以一定存在一个多数派集合C，C中的每一个acceptor一定接受了proposal(m, v)，对于新提出的proposal(n, v1)，存在一个多数派集合C1，C1中接受的最大提案号对应的值为v1。因为C1与C相交不为空，C1中接受过的最大提案号一定为m，所以v1=v</li>
+  <li>假设当k属于[m+2, n-1]时，其提案对应的值都是v，现在需要证明提案(n, v2)，v2=v
+    <ul>
+      <li>由于m已经被选择([m+1, n-1]状态未知)，所以一定存在多数派集合C，C中的提案号属于[m, n-1]，此时，
+新提出的proposal(n, v1)，一定存在一个多数派集合S，S中的最大提案号对应的值为v1，因为S与C交集
+不为空，又因为S中的最大提案号一定属于[m, n-1]，所以得证v1=v</li>
+    </ul>
+  </li>
+  <li>综上所述，得证！</li>
+</ul>
+
+<hr />
+
+<p>思考，为什么一定存在多数派C，C中的提案号属于[m,n-1]？
+因为提案m已经被选择，所以一定存在多数派集合C，其中的acceptor接受的提案号等于m，而对于[m+1, n-1]，
+其状态未知，可能被接受也可能被选择，但是多数派一定已经存在。</p>
+
+<p>对于任意的v和n，如果proposal(n, v)被proposer提出，那么一定存在一个多数派集合，在这个集合中</p>
+
+<ul>
+  <li>要么没有acceptor接受过小于n的proposal</li>
+  <li>要么acceptor接受过小于n的proposal，但是这些proposal中proposal number最大的proposal对应的value一定是v <strong>MaxVote定义</strong></li>
+</ul>
+
+<p><strong>P2c已经提供了一种实现方式了，现在问题是获取多数派中最大提案号对应的值</strong>，接下来就是算法流程了</p>
+
+<h1 id="算法基本流程">算法基本流程</h1>
+
+<h2 id="prepare阶段">prepare阶段</h2>
+
+<p><strong>prepare阶段就是获取MaxVote的过程</strong></p>
+
+<ul>
+  <li>proposer向acceptor广播prepare请求，prepare请求需要携带上proposalId号
+    <ul>
+      <li>acceptor接收到prepare请求，如果proposalId大于acceptor接受过的<strong>最大proposalId</strong>，则同意，并作出如下<strong>两个承诺</strong>，并返回其接受过<strong>最高的proposalId的value</strong>（如果有的话），置<strong>minProposalId=proposalId</strong>
+        <ul>
+          <li>不再接受<strong>小于等于</strong>proposalId的prepare请求(论文原文是不再接受小于proposalId的prepare请求，因为论文原文强调proposalId<strong>全局唯一且递增</strong>)</li>
+          <li>不再接受<strong>小于</strong>proposalId的accept请求</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="accept阶段">accept阶段</h2>
+
+<ul>
+  <li>如果proposer接受到多数派的成功响应，就可发送accept请求了
+    <ul>
+      <li>accept请求由proposalId和value构成，value由prepare阶段中最高proposalId的value决定</li>
+      <li>proposer向所有acceptor发出accept请求Accept(proposalid, value)</li>
+      <li>Acceptor接收到Accept请求，判断<strong>proposalid &gt;= minProposal</strong>
+        <ul>
+          <li>如果<strong>proposalid &gt;= minProposal</strong>，执行minProposal = proposalid，acceptedProspoal = prospoalid，acceptedValue = valus</li>
+          <li>否则，reject</li>
+        </ul>
+      </li>
+      <li>如果proposer收到多数派的success，那么表示value已经达成决议</li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="paxos几个条件">Paxos几个条件</h2>
+
+<ul>
+  <li>P1 对于接收到的第一个提案,acceptor必须接受</li>
+  <li>P2.c 提案(n, v)被提出,那么在多数派集合S中
+    <ul>
+      <li>在S中,要么没有任何acceptor接收到小于n的提案</li>
+      <li>在S中,要么所有acceptor中接受的小于n的提案中最大提案号对应的value=v</li>
+    </ul>
+  </li>
+</ul>
+
+<p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/paxos/paxos_01.png" alt="" /></p>
+
+<ol>
+  <li>node1发起prepare(1)请求，然后得到多数派应答，acceptors记录minProposal = 1</li>
+  <li>node1发现多数派的应答中的highest proposalid中的value=”“，于是自定义value=a</li>
+  <li>node1发起accept(1, a)请求</li>
+  <li>node1发出的accept请求仅仅得到node3自己的response，所以没有被choose</li>
+  <li>node3发出prepare请求，获得node2以及node3的prepare response，进入下一步</li>
+  <li>node3发出accept(2, b)请求</li>
+  <li>node3发出的accept请求仅仅得到自己的response，所以没有被choose</li>
+  <li>node1重新发出prepare请求，proposalId = 3</li>
+  <li>node1发出的prepare请求得到node1以及node2的应带</li>
+  <li>node1接收到的prepare response中的最高proposalid = 1，其对应的acceptValue = a，所以发出accept(3, a)</li>
+  <li>成功得到多数派accept应答，完成a的choose</li>
+  <li>同理，node3发出prepare(4)请求，此时完成的也是a的choose，图中的<strong>多数派交集</strong>会在第一步告诉node3，目前node2已经完成了proposalId=3, acceptValue=a的请求</li>
+</ol>
+
+<hr />
+
+<h1 id="几个问题">几个问题</h1>
+<ul>
+  <li>proposalid 是否必须递增且不重复?
+    <ul>
+      <li>递增不是必须，但是因为效率，最好递增，这样可以减少prepare rpc次数</li>
+      <li>不重复我觉得是必须的
+        <ul>
+          <li>尽管minProposal可以大部分情况下保证共识性，但是当出现配置变更时就会被打破</li>
+          <li>如果出现网络报文的延时也会影响一致性，考虑：s1节点在发送prepare(proposal=1)请求超时了，然后再次发送prepare(proposal=1)，正确完成proposal=1的accept操作，此时s1宕机，然后s1再次恢复，发出prepare(proposal=1)请求，结果上一次超时的prepare(proposal=1)又回来了，分布式环境就是如此神奇，哈哈哈哈哈哈，结果可想而知</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>
+    <p>acceptor在accept阶段是否必须接收&gt;=的proposal?</p>
+
+    <ul>
+      <li>必须接收&gt;=的proposal，如果不接受=的，那么经过prepare的proposal将会被拒绝</li>
+    </ul>
+  </li>
+  <li>
+    <p>acceptor在accept阶段是否必须记录accepteProposalId以及acceptValue?</p>
+
+    <ul>
+      <li>首先acceptValue是必须记录的，因为Basic Paxos不就是为了对某个value达成共识吗？</li>
+      <li>accepteProposalId必须记录，如果不记录，而仅仅只是通过minProposal进行判断会出现问题，根本原因是：minProposal与acceptValue不构成一一对应的关系</li>
+    </ul>
+
+    <p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/paxos/paxos_02.png" alt="" /></p>
+
+    <p>如果不记录acceptProposalId，那么会出现如上图的请求，在step11以及step16分别完成a，b的choose，这破坏了paxos的<strong>对某个值达成共识</strong>的特性</p>
+  </li>
+  <li>对于5个节点，在prepare阶段接收到4个acceptor的响应才能正确进行下一步，对于accept阶段，接受到两个accetor的响应才能正确完成choosen，这样做是否能够保证正确？
+    <ul>
+      <li>可以保证正确，满足NWR，即prepare相当于read，accept相当于write</li>
+      <li>但是这种情况无法完成2节点的容错</li>
+    </ul>
+  </li>
+  <li>
+    <p>accept阶段能否不更新acceptProposal?</p>
+
+    <ul>
+      <li>不能，这样会出现overwrite。其实这里的情况和不记录acceptProposal差不多，考虑这种情况，s1 s2 s3三个节点，现在s1prepare(proposal=1)请求，且成功在s1节点上完成accept(value = blue, minProposal=1, acceptProposal=1)，s3发起preapre(proposal=2)请求，请成功在s3上完成accept(value=red, minProposal=2, acceptProposal=2)，现在s1再次发起prepare(proposal=3)请求，成功在s1 s2上完成accept(value=blue, minProposal=3, acceptProposal=1)请求，然后s3发起prepare(proposal=4)请求，接收到各个节点返回的已经accpeted请求，发现最大acceptProposal的value=red，结果可想而知，这不经让我想起了：p2c——如果proposer发起了一个prepare(n，value)请求，要么没有已经接受过&lt;n的acceptor，要么接受过&lt;n的acceptor中最大acceptValue=value</li>
+    </ul>
+  </li>
+</ul>
+
+<hr />
+
+<p>Lamport老爷子在文献[1]中已经说过：</p>
+
+<ul>
+  <li>agent(proposer、acceptor)能够以<strong>任意</strong>的速度处理请求，并且agent可能宕机，可能重启</li>
+  <li>message以任意长的时间传递，它们可以被复制，可以丢失，但是不能被损坏</li>
+</ul>
+
+<p>个人觉得，理解了这两句话才能够更好的理解paxos算法</p>
+
+<p>Paxos made simple中我觉得比较重要的一段话，读懂了这段话，上面的大部分问题都能迎刃而解</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>With this optimization, an acceptor needs to remember only the highest-numbered
+proposal that it has ever accepted and the number of the highest-numbered prepare
+request to which it has responded. Because P2c must be kept invariant regardless of
+failures, an acceptor must remember this information even if it fails and then
+restarts. Note that the proposer can always abandon a proposal and forget all about it
+as long as it never tries to issue another proposal with the same number.
+</code></pre></div></div>
+
+<p>总结起来就是，为了保证P2c的不变性</p>
+
+<ul>
+  <li>acceptor需要记录已经接受过的<strong>最高提案号对应的proposal</strong>以及已经接受过<strong>prepare request的最大提案号</strong></li>
+  <li>proposer需要做到不提交重复的提案号</li>
+</ul>
+
+<hr />
+
+<h1 id="参考">参考</h1>
+
+<p>[1].  paxos made simple</p>
+
+<p>[2]. <a href="https://www.youtube.com/watch?v=JEpsBg0AO6o&amp;t=53s">paxos lecture (raft 作者)</a></p>
+
+<p>[3]. <a href="https://github.com/brpc/braft/blob/master/docs/cn/paxos_protocol.md">braft的paxos文档</a></p>
+
+<p>[4]. <a href="https://yq.aliyun.com/articles/64281">paxos证明</a></p>
+:ET

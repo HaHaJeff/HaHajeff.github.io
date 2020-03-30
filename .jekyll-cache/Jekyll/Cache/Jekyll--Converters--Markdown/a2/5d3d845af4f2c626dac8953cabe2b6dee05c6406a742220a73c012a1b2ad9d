@@ -1,0 +1,449 @@
+I"�m<hr />
+
+<h1 id="google-file-system">google file system</h1>
+
+<h2 id="背景">背景</h2>
+
+<ul>
+  <li>系统存储一定数量的<strong>大文件</strong></li>
+  <li>系统的工作负载主要由两种读操作组成：<strong>大规模的流式读取和小规模的随机读取</strong>
+    <ul>
+      <li>大规模流式读取通常一次读取数百KB的数据，更常见的是一次读取1MB甚至更多的数据</li>
+      <li>小规模的随机读取通常是在文件某个随机的位置读取几个KB数据</li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="架构">架构</h2>
+
+<p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/gfs/GFS_Architecture.png" alt="" /></p>
+
+<ul>
+  <li>一个GFS集群包含一个单独的Master节点、多台chunk服务器。</li>
+  <li>GFS存储的文件都被分割成固定大小的Chunk。在Chunk创建的时候，Master服务器会给每个Chunk分配一个不变的、全球唯一的64位Chunk标识。</li>
+  <li>Chunk服务器把Chunk以文件的形式保存在本地硬盘上，并且根据指定的chunk标识和字节范围来读写块数据。</li>
+  <li>出于<strong>可靠性</strong>的考虑，每个chunk都会复制到多个chunk服务器上，默认使用3副本进行保存。</li>
+</ul>
+
+<h3 id="master节点">Master节点</h3>
+
+<p>Master节点管理文件系统的所有<strong>元数据</strong>信息，这些元数据包括：</p>
+
+<ul>
+  <li>名字空间（指文件系统的目录结构等信息）</li>
+  <li>访问控制信息</li>
+  <li>文件和chunk的映射信息</li>
+  <li>当前chunk的位置信息</li>
+</ul>
+
+<p>与此同时，Master还管理着系统范围内的活动，比如：</p>
+
+<ul>
+  <li>chunk的lease分配</li>
+  <li>过时chunk的回收</li>
+  <li>chunk在chunk服务器之间的迁移</li>
+</ul>
+
+<p>Master节点使用<strong>心跳信息</strong>周期地和每个chunk服务器进行通讯，发送指令到各个chunk服务器并接收chunk服务器的状态信息。</p>
+
+<p>单一的Master节点策略大大简化了GFS的设计，通过Master拥有的全局Chunk信息，可以完成Chunk位置的定位以及Chunk的复制决策。</p>
+
+<p>但是，单一的Master节点也引来的另外一个问题：必须减少对Master节点的读写，避免Master节点成为系统的瓶颈。GFS的解决方式是：客户端并不通过Master节点直接读写文件，而是通过向Master节点获取需要访问的Chunk的具体位置后，客户端直接与对应的Chunk服务器进行通信，与此同时，<strong>客户端会对这些元数据信心进行一段之间的缓存</strong></p>
+
+<p>通过Figure1. GFS Architecture描述一次简单的读取流程：</p>
+
+<ol>
+  <li>客户端把<strong>文件名</strong>和<strong>指定的字节偏移</strong>（类似POSIX的read调用），根据固定的Chunk大小，传换成文件的Chunk索引。</li>
+  <li>把Chunk索引和文件名发送的Master节点。</li>
+  <li>Master节点将相应的Chunk标识和副本的位置信息返回给客户端。</li>
+  <li>客户端在本地构建一个key=Chunk索引+文件名，value=Chunk位置的缓存结构</li>
+  <li>客户端发送请求到其中的一个副本处，一般选择最近的。请求信息包含了Chunk的标识和字节范围</li>
+</ol>
+
+<p><strong>一切为了效率</strong></p>
+
+<p>当客户端向Master请求Chunk的具体位置时，Master不仅仅只是将对应Chunk的具体位置发送给客户端，同时也会将该Chunk后面的Chunk信息也发送给客户端。这些额外的信息在没有任何代价的情况下，避免了客户端和Master节点未来可能发生的几次通讯。<strong>类似read的预读</strong>。</p>
+
+<h2 id="chunk尺寸">Chunk尺寸</h2>
+
+<p>GFS选择了64MB作为Chunk的默认大小，着远大于一般文件系统的Block大小，由背景知识可知，这是合理的。</p>
+
+<p>需要注意的是：每个Chunk的副本都已文件的形式保存在Chunk服务器上，<strong>采用惰性空间分配策略</strong>，只有需要的时候才对其进行扩大。这很好的避免的内部碎片导致的空间浪费。</p>
+
+<p>现在来看64MBChunk带来的优点：</p>
+
+<ol>
+  <li>避免了Master节点成为性能瓶颈，Master需要管理所有的Chunk，采用大尺寸的Chunk可以减少元数据信息规模。</li>
+  <li>减少了客户端和Master节点通讯的需求，只需要一次和Master节点通信就可以获取Chunk的位置信息，之后可以对同一个Chunk进行多次的读写操作。</li>
+  <li>减少了客户端与chunk server之间的网络开销，在一个chunk上往往会进行多次操作，采用tcp连接可以减少网络开销</li>
+</ol>
+
+<p>缺点：</p>
+
+<ol>
+  <li>即使结合惰性空间分配策略，采用较大的Chunk尺寸也有其缺陷，如果一个文件对应的Chunk很少，举例来说，如果文件只对应了一个Chunk，那么存储这个Chunk的Chunk服务器就会变成访问热点。</li>
+  <li>一个可执行文件被写入GFS,然后数百个client同时使用它,那么存储这个可执行文件对应chunk的chunk server将会面临大量的同时方式.解决方法:<strong>使用高副本因子</strong></li>
+</ol>
+
+<h2 id="元数据">元数据</h2>
+
+<p>Master服务器存储三种主要类型的元数据：</p>
+
+<ul>
+  <li>文件和Chunk的命名空间 (将文件组织成为目录)</li>
+  <li>文件和Chunk的对应关系</li>
+  <li>Chunk的具体位置</li>
+</ul>
+
+<p>前两种类型的元数据同时也会以<strong>记录变更日志</strong>的方式记录在操作系统的系统日志文件中，日志文件保存在本地磁盘上，同时日志会被复制到备份Master节点上。采用日志变更的方式，可以<strong>简单可靠的更新Master服务器的状态，并且不用担心Master服务器崩溃导致数据不一致的风险</strong>。与之相反，Master服务器<strong>不会持久保存Chunk的位置信息</strong>，当Master服务器启动时，或者有新的Chunk服务器加入时，向各个Chunk服务器轮询问它们所存储的Chunk的信息。</p>
+
+<p>抛出一个问题：<strong>Master如何将文件组织成为目录？</strong></p>
+
+<p>因为元数据保存在内存中，所以Master服务器对这些元数据的操作会非常快。Master通过在后台周期性的扫描已保存的全部状态信息，这种周期性的扫描用于实现：</p>
+
+<ul>
+  <li>Chunk的垃圾收集</li>
+  <li>当Chunk服务器失效的时候重新复制数据</li>
+  <li>通过Chunk的迁移实现跨Chunk服务器的负载均衡</li>
+  <li>统计磁盘使用情况</li>
+</ul>
+
+<p>将元数据全部保存在内存中的缺陷：</p>
+
+<p>Chunk的数量以及整个系统的承载能力都受限于Master服务器所拥有的内存大小。</p>
+
+<h2 id="chunk位置信息">chunk位置信息</h2>
+
+<p>Master服务器并不保存持久化哪个Chunk服务器存有指定的Chunk副本信息，它只是在启动的时候轮询Chunk服务器以获取这些信息。那么如何保证这些信息的有效性呢？</p>
+
+<ul>
+  <li>首先Master服务器空间了所有Chunk位置的分配</li>
+  <li>周期性的心跳信息可以帮助Master服务器获取最新的信息</li>
+</ul>
+
+<h2 id="操作日志">操作日志</h2>
+
+<p>操作日志包含了关键的<strong>元数据变更</strong>历史,这种日志的作用:</p>
+
+<ul>
+  <li>持久化元数据记录</li>
+  <li>定义了并发操作的逻辑时间序</li>
+</ul>
+
+<p>当master服务器奔溃使,通过这些日志可用重新构建前两种类型的元数据</p>
+
+<p>为了减少重建开销,采用checkpoint方式对日志进行压缩</p>
+
+<p>创建checkpoint是一个耗时操作,为了不停服务,GFS采用新创建一个日志文件,并<strong>创建一个线程完成checkpoint</strong>,后续的操作将会在记录到<strong>新的日志文件中</strong>.</p>
+
+<h2 id="一致性模型">一致性模型</h2>
+
+<p>文件命名空间的修改（例如文件创建）是原子性的。它们仅仅由Master节点控制：</p>
+
+<ul>
+  <li><strong>命名空间锁</strong>提供了原子性和正确性保障</li>
+  <li>Master节点的操作日志定义了这些操作在全局的顺序</li>
+</ul>
+
+<p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/gfs/consiste_model.png" alt="" /></p>
+
+<ul>
+  <li>consisted：一致是<strong>针对服务器</strong>而言的，如果文件在各个服务器上呈现处一致的状态，那么称其为consisted</li>
+  <li>defined：defined是<strong>针对客户端</strong>而言的，如果每次客户端的访问都能access到最新的数据</li>
+</ul>
+
+<p><strong>举例：</strong></p>
+
+<ul>
+  <li>
+    <p>对于串行写，A (“fileA”, offset=[30, 50])，此时A去读，一定可以读到fileA对应的[30, 50]的最新数据</p>
+  </li>
+  <li>
+    <p>对于并行写，A (“fileA”, offset=[30, 50])，此时B同时写 B(“fileA”, [40, 60])，那么如果A去读的话，可能读到自己写的[30, 50]，也可能得到自己写的[30, 40]以及B的[40, 50]，但是各个replica上对应的data是一致的</p>
+  </li>
+  <li>
+    <p>对于记录追加，由于GFS保证每个副本至少成功一次，所以可能出现某个replica追加失败但是其他replica追加成功，于是为了保证at least once特性，只能重试这个操作，所以服务器上可能出现不一样</p>
+
+    <ul>
+      <li>
+        <p>串行：第一次追加请求执行了一半失败了，这个chunk的所有副本现在是这样：</p>
+
+        <p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/gfs/append_01.png" alt="" /></p>
+
+        <p>重复尝试后：</p>
+
+        <p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/gfs/append_02.png" alt="" /></p>
+
+        <p>对于上图，中间的数据是inconsistent，但是尾部的数据的define的</p>
+      </li>
+      <li>
+        <p>并行：clientA与clientB并行的追加a和b，primary接受到两个request并将其序列化，如下图：</p>
+
+        <p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/gfs/append_03.png" alt="" /></p>
+
+        <p>追加b失败，追加a成功，于是clientB重试，如下图：</p>
+
+        <p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/gfs/append_04.png" alt="" /></p>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<h1 id="系统交互">系统交互</h1>
+
+<p>设计GFS时，一个最重要的原则是<strong>最小化所有操作和Master节点的交互</strong></p>
+
+<h2 id="租约lease和变更顺序">租约(lease)和变更顺序</h2>
+
+<p>变更操作会改变Chunk内容或者元数据，比如写入操作或者记录追加操作。变更操作会在Chunk上所有副本上执行，那如何保证Chunk副本上的一致性？试想一下，client现在有Chunk的位置了，如果不对这些Chunk服务器的读写进行相关控制那如何保证一致性呢。</p>
+
+<p>GFS采用租约的方式维持一致性。Master节点为Chunk的一个副本建立一个lease，这个副本叫做主Chunk。主Chunk对Chunk的所有变更操作进行序列化，所有的副本都遵循这个序列进行修改操作，这样就保证了一致性。</p>
+
+<p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/gfs/WriteFlow.png" alt="" /></p>
+
+<p>从图片2中可以习得操作流程：</p>
+
+<ol>
+  <li>客户端向Master节点发出询问：哪一个Chunk服务器持有当前的租约，以及其他副本的位置，如果没有一个Chunk持有租约，Master节点就选择其中一个副本建立一个租约。</li>
+  <li>Master节点将主Chunk的标识符以及其他副本的位置返回给客户机，客户机缓存这些数据以便后续的操作。只有在主Chunk不可用，或者主Chunk回复信息表明它已不再持有租约的时候，客户机才向Master节点再次询问。</li>
+  <li>客户机把数据推送到所有副本上。<strong>客户机可以以任意的顺序推送数据</strong>。Chunk服务器接收到数据并保存在内存的LRU缓存中，一直到数据被使用或者过期交换出去。<strong>由于数据流的网络传输负载比较高，通过分离控制流和数据流，可以基于网络拓扑情况对数据流进行规划，提高系统性能</strong>。</li>
+  <li>当所有的副本都确认收到了数据，客户机发送写请求到主Chunk服务器。这个请求标识了早前推送到所有副本的数据。<strong>主Chunk为接收到的所有操作分配连续的序列号</strong>，这些操作可能来自不同的客户机，序列号保证操作顺序执行，<strong>值得注意的是：这个顺序不一定客户机发起操作的顺序，而是主Chunk规定的顺序，例如主Chunk以FIFO的方式接收Client的操作并编号。</strong></li>
+  <li>主Chunk将写请求发送到所有的二级副本。每个二级副本依照主Chunk分配的序列号以相同的顺序执行这些操作。</li>
+  <li>所有的二级副本回复主Chunk，它们已经完成了操作。</li>
+  <li>主Chunk服务器回复客户机。</li>
+</ol>
+
+<p>错误分析：</p>
+
+<ul>
+  <li>如果在主Chunk上失败，操作就不会被分配序列号，也不会被传递。</li>
+  <li>如果在二级Chunk上部分成功，那么客户端的请求被确认为失败，<strong>客户端会重复执行失败的操作来处理这样的错误</strong>。所以被修改的文件region可能处于不一致的状态。</li>
+  <li>如果应用程序一次写入的数据量很大，或者数据跨越了多个Chunk，GFS会将它们分成多个写操作。这些操作顺序遵循上述控制流程，但是其他客户机可能对相同的Chunk进行变更操作，这可能会出现一致的但是未定义的状态。</li>
+</ul>
+
+<h2 id="数据流">数据流</h2>
+
+<p>GFS采用分离数据流与控制流的方式提高网络效率。<strong>在控制流从客户机到主Chunk、然后再到所有二级副本的同时，数据以管道的方式，顺序的沿着一个精心选择的Chunk服务器链推送。</strong>目标是：<strong>充分利用每台机器的带宽，避免网络瓶颈和高延时的连接，最小化推送所有数据的延时</strong></p>
+
+<p><strong>如何充分利用带宽以及提高网络效率?</strong></p>
+
+<ul>
+  <li><strong>链式推送</strong>，每台机器的所有出口带宽都用于以最快的速度传输数据，而不是在多个接收者之间分配带宽</li>
+  <li><strong>避免网络瓶颈</strong>：每台机器都尽可能的在网络拓扑中选择一台还没有接收到数据的、离自己最近的机器作为目标推送数据</li>
+  <li><strong>最小化延迟</strong>：利用基于TCP连接的、管道式数据推送方式最小化延迟，当Chunk服务器接收到数据后，马上开始向前推送</li>
+</ul>
+
+<h2 id="原子追加操作">原子追加操作</h2>
+
+<p>GFS保证记录追加是原子进行的</p>
+
+<ul>
+  <li><strong>传统的写方式</strong>，客户程序指定数据写入的偏移量。由于并发写入会导致一致但是未定义的行为的，就在服务器上所有的数据都是一致的，但是客户读取的数据不一定是想要的数据</li>
+  <li><strong>记录追加方式</strong>，为了保证原子性，所以当某个Chunk服务器出现失败的时候，会重试直到全部成功，这会导致服务器上出现不一致的情况，但是保证数据是不会被覆盖的，然后客户端可以通过一些标识得到自己想要的数据</li>
+</ul>
+
+<p><strong>值得注意的是</strong>，当客户发送请求到主Chunk服务器的时候，主Chunk服务器会检查这次操作<strong>是否会使Chunk超过最大尺寸（64MB）</strong>，如果超过了64MB，那么主Chunk服务器会对该Chunk进行一次padding操作，之后通知所有二级副本做同样的操作，然后回复客户端，通知其：你只能对下一个Chunk进行同样的操作了，我这已经满了。</p>
+
+<h2 id="snapshot">snapshot</h2>
+
+<p>快照操作可以瞬间完成对一个文件或者目录树做一个拷贝，并且几乎不会对正在进行的其他操作造成任何干扰。</p>
+
+<p>GFS使用cow技术实现快照操作，当Master节点收到一个快照请求，它首先取消需要做快照的文件包含的所有Chunk的lease。这个措施保证了<strong>后续对这些Chunk的写操作都必须与Master进行交互</strong>，交互这一次操作十分重要，因为Master可以误为这些Chunk创建一个新的copy。具体流程如下：</p>
+
+<ol>
+  <li>取消租约之后，Master节点将这个操作以日志的方式记录到硬盘上(<strong>保证可靠性</strong>)，然后Master节点通过复制源文件或者目录的元数据的方式，把这条日志记录的产生的副作用返回到内存保存的状态中(因为Master节点会将元数据保存在内存中，提高效率)。这里完成copy操作，<strong>即快照文件和源文件指向相同的Chunk地址</strong></li>
+  <li>在快照操作之后，当客户机第一次想写入数据到该Chunk，它首先会发送一个请求到Master节点查询当前的租约持有者。Master节点注意到该Chunk的引用计数超过1，此时Master节点不会马上答复客户机的请求，而是创建一个新的Chunk’元数据，并且通知拥有该Chunk的服务器为该Chunk创建一个Chunk‘的副本。通过在原Chunk服务器本地创建新的Chunk副本，减少网络通信带来的消极影响</li>
+</ol>
+
+<h1 id="master节点-1">Master节点</h1>
+
+<ul>
+  <li>Master执行所有的命名空间操作</li>
+  <li>管理系统所有Chunk
+    <ul>
+      <li>决定Chunk存储位置</li>
+      <li>负责创建新的Chunk及其副本</li>
+      <li>Chunk服务器之间的负载均衡</li>
+      <li>垃圾回收</li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="命名空间管理和锁">命名空间管理和锁</h2>
+
+<p>Master节点的很多操作会花费很长的时间：比如在进行snapshot操作时，必须取消涉及到这次snapshot操作所有相关的Chunk的Chunk服务器的租约，很绕口啊。GFS的目标是：<strong>在进行这一类操作时，不希望阻塞Master节点的其他操作</strong>，采用的方式：<strong>使用命名空间的region上的锁来保证执行的正确顺序</strong></p>
+
+<p>不同于许多传统文件系统，GFS不支持<strong>ls</strong>操作，也不支持<strong>link</strong>操作。在逻辑上，<strong>GFS的命名空间就是一个全路径和元数据映射关系的查找表</strong>。利用<strong>前缀压缩</strong>，这个表可以高效的存储在内存中。</p>
+
+<p>每个Master节点在操作之前都需要获取一系列的锁。通过情况下，如果一个操作涉及/d1/d2/…/dn/leaf，那么该操作首先需要获得目录/d1，/d1/d2，…，/d1/d2/…/dn的读锁，以及/d1/d2/…/dn/leaf的读写锁。leaf可以是目录也可以是文件。</p>
+
+<p>举例，对/home/user进行snapshot操作(即将/home/user copy到/save/user)，<strong>锁</strong>机制如何防止创建文件/home/user/foo。快照操作获取/home和/save的<strong>读取锁</strong>，以及/home/user和/save/user的写入锁。然而，创建文件/home/user/foo需要获取/home、/home/user的读锁以及/home/user/foo的写锁，由于锁产生冲突，所有snapshot和creation操作会被串行执行。</p>
+
+<p>采用这种锁方案的优点：</p>
+
+<ul>
+  <li>支持对同一目录的并行操作</li>
+  <li>文件名的写入锁序列化文件创建操作，确保不会多次创建同名的文件</li>
+</ul>
+
+<h2 id="副本的位置">副本的位置</h2>
+
+<p>Chunk副本位置选择的策略有两大目标:</p>
+
+<ul>
+  <li>最大化数据可靠性和可用性</li>
+  <li>最大化网络带宽利用率</li>
+</ul>
+
+<p><strong>GFS采用多机架放置副本</strong></p>
+
+<h2 id="创建重新复制重新复杂均衡">创建，重新复制，重新复杂均衡</h2>
+
+<p>Chunk的副本有三个用途：</p>
+
+<ul>
+  <li>Chunk创建</li>
+  <li>重新复制Chunk</li>
+  <li>重新负载均衡</li>
+</ul>
+
+<p>当Master节点创建一个Chunk时，它会选择在哪里放置初始的空副本，由以下几个因素决定：</p>
+
+<ol>
+  <li>在低于平均硬盘使用率的Chunk服务器上存储新的副本。这样的做法最终能够平衡Chunk服务器之间的硬盘使用率</li>
+  <li>限制在Chunk服务器上”最近“的Chunk创建操作数，因为创建Chunk意味着数据的写入（这里指同时在Chunk服务器上创建不同Chunk的副本数）</li>
+  <li>将Chunk的副本分布在多个机架间</li>
+</ol>
+
+<p>当Master节点<strong>重复制</strong>一个Chunk时，也是有上述的几个因素决定，<strong>为了防止克隆产生的网络流量大大超过客户机的流量，Master节点对整个集群和每个Chunk服务器上的同时进行的克隆操作的数据都进行了限制</strong></p>
+
+<p>Master服务器周期性的对副本进行<strong>重新复杂均衡</strong>，Master节点检查当前副本的分布情况，然后<strong>移动副本以便更好的利用硬盘空间、更有效的进行负载均衡</strong>。移动策略：<strong>Master节点会选择重负载那些剩余空间低于平均值的Chunk服务器上的副本，从而平衡系统整体的硬盘使用率</strong></p>
+
+<h2 id="垃圾回收">垃圾回收</h2>
+
+<p>GFS在文件删除后不会立刻回收可用的物理可用空间。GFS空间回收采用惰性的策略，只在Master进行定期垃圾回收操作时才会真正意义上的进行回收。</p>
+
+<h2 id="机制">机制</h2>
+
+<p>当一个文件被删除时，Master节点首先记录<strong>delete</strong>日志，立刻把删除操作以日志的方式持久化。然后将该文件rename为一个包含时间戳的隐藏名字。当Master节点对文件系统命名空间进行扫描时，默认会删除所有三天前的隐藏文件。</p>
+
+<p>在对命名空间进行扫描时，如果Master节点发现孤儿Chunk（不被任何文件包含的Chunk），直接删除其元数据。并在和Chunk服务器的心跳信息中包含那些元数据已经不在的Chunk，这样Chunk服务器可以删除这些Chunk。</p>
+
+<p>GFS中的垃圾回收总结：</p>
+
+<ul>
+  <li>GFS通过存储在Master服务器上的文件到Chunk的映射表，可以轻易的得到文件的所有Chunk</li>
+  <li>Chunk以文件形式存储在Chunk服务器上，所以也可以轻易的得到所有Chunk的副本</li>
+  <li>垃圾回收提供了一致的、可靠的清除无用副本的方法</li>
+  <li>垃圾回收把空间操作的回收操作合并到Master节点的后台操作中，均摊开销</li>
+</ul>
+
+<h2 id="过期失效的副本检测">过期失效的副本检测</h2>
+
+<p>当Chunk服务器失效时，存储在其上的Chunk副本可能因错失了一些修改操作而过期失效。Master节点在和Chunk续约时会增加版本号，并且Master节点和Chunk的所有副本都会把新的version number持久化，<strong>通过版本号来区分当前副本和过期副本</strong>。</p>
+
+<hr />
+
+<ol>
+  <li>为什么在GFS中的客户端以及Chunk服务器都不需要缓存文件数据？
+    <ul>
+      <li>客户端不需要缓存数据的原因：大部分程序要么以<strong>流的方式</strong>读取一个大文件，要么工作集太大根本无法被缓存。</li>
+      <li>Chunk服务器不需要缓存数据的原因：Chunk被以文件的形式保存在本地文件系统的中，利用文件系统的特性即可。</li>
+      <li><strong>由于不需要缓存数据，所以不需要考虑一致性问题</strong>。不过，客户端会缓存元数据。</li>
+    </ul>
+  </li>
+  <li>为什么Chunk服务器默认采用三副本？
+    <ol>
+      <li>从可靠性角度出发</li>
+    </ol>
+  </li>
+  <li>为什么GFS设计采用控制流分离的方式？
+    <ol>
+      <li>因为数据流的网络传输负载比较高，通过控制流，可以对数据流进行规划，择优传输数据</li>
+    </ol>
+  </li>
+  <li>为什么GFS采用64MB这种大size对数据进行分片？
+    <ol>
+      <li>google内部的工作负载决定的。</li>
+    </ol>
+  </li>
+  <li>为什么需要设计租约？
+    <ol>
+      <li>设计租约的目的是为了最小化Master节点的管理负担</li>
+    </ol>
+  </li>
+  <li>GFS是如何通过Checksum完成忽略record append操作带来的padding以及重复记录？
+    <ol>
+      <li><strong>解决padding</strong>，可以在有效记录前面增加一个magic number或者checksum标识这条record是非padding</li>
+      <li><strong>解决重复</strong>，在record中包含一个unique id，如果发现这天record的id和前一条的一样，那么就可以确认这条record是重复的</li>
+    </ol>
+  </li>
+  <li>GFS为什么采用多机架放置副本？
+    <ol>
+      <li>GFS为了最大化数据可靠性和可用应，最大化网络带宽利用率，选择将副本放置于不同机架间。如果仅仅只是将副本放置于多台机器上，这只能预防硬盘损坏或者机器失效带来的影响，以及最大化每台机器的网络带宽利用率。<strong>如果整个机架被破坏，这会导致服务不可用</strong>，当然有得必有失，虽然多机架副本策略提高了可用性以及最大化了网络带宽利用率，但是<strong>写操作必须和多个机架上的设备进行通信</strong></li>
+    </ol>
+  </li>
+  <li>GFS在什么时候会创建Chunk副本？
+    <ol>
+      <li>当需要新的Chunk进行写入操作时</li>
+      <li>当Chunk的有效副本数少于用户指定的复制因数时
+        <ol>
+          <li>一个Chunk服务器不可用了</li>
+          <li>Chunk服务器向Master节点报告它所存储的一个副本损坏了</li>
+          <li>Chunk服务器的一个磁盘不可用了</li>
+          <li>Chunk副本的复制因数提高了</li>
+        </ol>
+      </li>
+    </ol>
+  </li>
+  <li>为什么不将chunk location这一类元数据持久化保存在master上?
+    <ol>
+      <li>避免master和chunk server之间的同步,这种同步发生在:chunk server加入或离开集群,chunk server改名,失败,重启等.</li>
+      <li>在master启动时,向chunk server轮询chunk location+定期轮询相对来说简单的多,因为不需要同步操作.</li>
+      <li>进一步来说,在master上持久化保存chunk location没有意义,因为chunk server才是决定chunk是否存在的唯一因素,考虑chunk server被重命名了或者chunk server上chunk由于某种错误消失了,那此时master上的信息将是无意义的.</li>
+    </ol>
+  </li>
+  <li>为何并发append失败，仍然能够保证defined？
+    <ol>
+      <li>因为GFS保证Append的原子性(出现失败会重试)</li>
+    </ol>
+  </li>
+  <li>GFS应用程序如何在宽松一致性模型下良好的工作？
+    <ol>
+      <li>通过append而不是overwrite</li>
+      <li>checkpoint</li>
+      <li>write self-validating</li>
+      <li>self-identify records</li>
+    </ol>
+  </li>
+  <li>客户端会不会读取到过时或失效的数据？
+    <ol>
+      <li>写入操作成功：
+        <ol>
+          <li>客户端缓存了chunk location元数据，如果chunkserver出现数据过时(如chunkserver重启)，那么客户端将读到过期的数据</li>
+          <li>从shadow master可能会读到过期的元数据，所以可能会读到过期的元数据</li>
+        </ol>
+      </li>
+      <li>写入失败：
+        <ol>
+          <li>写入失败肯定会导致inconsistent</li>
+        </ol>
+      </li>
+    </ol>
+  </li>
+  <li>客户端读取到错误数据怎么办？
+    <ol>
+      <li>如果客户端读取某个chunk的region，chunkserver发现该chunk的checksum出现错误，那么将返回错误给客户端并向master节点汇报</li>
+      <li>客户端此时访问其他副本，服务器将一个正确的chunk replica复制到该chunkserver上并通知chunkserver将原先的chunk删除</li>
+    </ol>
+  </li>
+</ol>
+
+<hr />
+
+<p><strong>参考文献</strong></p>
+
+<p>[1]. The Google File System</p>
+
+<p>[2]. Google File System 中文版</p>
+:ET

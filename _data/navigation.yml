@@ -1,10 +1,14 @@
 # main links
 main:
-  - title: "年表"
-    url: /year-archive/
-  - title: "類別"
+  - title: "类别"
     url: /categories/
-  - title: "作品"
-    url: /works/
-  - title: "關於"
-    url: /about/
+  - title: "标签"
+    url: /tags/
+  #- title: "Total Blog"
+  #  url: /total
+  #- title: "Sample Posts"
+  #   url: /year-archive/
+  # - title: "Sample Collections"
+  #   url: /collection-archive/
+  # - title: "Sitemap"
+  #   url: /sitemap/

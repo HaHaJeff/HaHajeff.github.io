@@ -1,0 +1,206 @@
+I"#<hr />
+
+<h2 id="consistency-vs-coherence">consistency vs coherence</h2>
+<p>SWMR(Single-Writer-Multiple-Reader) invariant确保 <strong>在同一时间对同一个内存地址，a)一个core可能写(读)这个地址，b)一个或多个core读这个地址</strong>，Data-value invariant确保对该内存位置的更新可以被正确传送，也就是说core的cache总是拥有该地址的最新数据，故有cache coherence说法，cache间通过<strong>协调</strong>保证cache对一个值的确定。所以，为什么paxos叫做共识性算法而不是应该叫做一致性算法，这就是理由吧。各个节点间达成共识，对同一个值得读取保证得到最新得版本。</p>
+
+<p><strong>总而言之：</strong></p>
+
+<ul>
+  <li>cache coherence不等价于memory consistency</li>
+  <li>memory consistency需要用到cache coherence，但仅仅只是使用，memory consistency不需要了解cache coherence，就像黑盒一样使用它</li>
+</ul>
+
+<h2 id="memory-consistency">memory consistency</h2>
+
+<ul>
+  <li>定义：多线程程序对<strong>共享</strong>内存操作的规范，不涉及cache coherence——”Consistency models define correct shared memory behavior in terms of loads and stores (memory reads and writes), without reference to caches or coherence.”</li>
+</ul>
+
+<h2 id="sequence-consistency">Sequence consistency</h2>
+<p>lamport老爷子对SC的定义：</p>
+<ul>
+  <li>在single processor中，SC的定义：执行结果与按照程序order执行一致 <strong>the result of an execution is the same as if the operations had been executed in the order specified by the program</strong></li>
+  <li>在multiple processor中，SC的定义：任意一次的执行结果与所有processor按照某种顺序执行的结果一致，并且每一个独立的processor中的operations与程序的order一样</li>
+</ul>
+
+<table>
+  <thead>
+    <tr>
+      <th>core1</th>
+      <th>core2</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>S1: store data = new</td>
+      <td>L1: load r1 = flag</td>
+    </tr>
+    <tr>
+      <td>S2: store flag = set</td>
+      <td>B1: if r1 != set goto L1</td>
+    </tr>
+    <tr>
+      <td> </td>
+      <td>L2: r2 = data</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>在SC模型中，core1 core2按照指令顺序执行两段程序，并且L2将作为最后一条指令执行，读到结果r2=new</strong></p>
+
+<p><strong>requirements</strong></p>
+
+<ul>
+  <li>L(a) &lt;p L(b)      ====&gt;   L(a) &lt;m L(b)             load load can’t reordering</li>
+  <li>S(a) &lt;p S(b)     ====&gt;   S(a) &lt;m S(b)             store store can’t reodering</li>
+  <li>L(a) &lt;p S(b)     ====&gt;   L(a) &lt;m S(b)              load stote can’t reodering</li>
+  <li>S(a) &lt;p L(b)     ====&gt;   S(a) &lt;m L(b)              store load can’t reodering</li>
+</ul>
+
+<p><strong>X86架构下CPU默认coherance语义：除了Store load不支持其余全部支持</strong></p>
+
+<h2 id="complier-reorder">complier reorder</h2>
+
+<p>编译器为了提高程序运行效率，会对指令进行重排</p>
+
+<p>实验代码如下：</p>
+
+<p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/cache_coherence/compile_reorder_src.png" alt="" /></p>
+
+<p>使用</p>
+
+<blockquote>
+  <p>gcc -S -masm=intel test.c</p>
+</blockquote>
+
+<p>进行编译：</p>
+
+<p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/cache_coherence/compile_reorder_01.png" alt="" /></p>
+
+<p>使用</p>
+
+<blockquote>
+  <p>gcc-O2 -S -masm=intel test.c</p>
+</blockquote>
+
+<p>进行编译：</p>
+
+<p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/cache_coherence/compile_reorder_02.png" alt="" /></p>
+
+<p>发现指令已经被重排</p>
+
+<p>为了避免编译重排，采用汇编指令</p>
+
+<blockquote>
+  <p><strong>asm</strong> <strong>volatile</strong> (“” ::: “memory”);</p>
+</blockquote>
+
+<p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/cache_coherence/compile_reorder_src_01.png" alt="" /></p>
+
+<p>使用</p>
+
+<blockquote>
+  <p>gcc-O2 -S -masm=intel test.c</p>
+</blockquote>
+
+<p>进行编译：</p>
+
+<p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/cache_coherence/compile_reorder_03.png" alt="" /></p>
+
+<p>编译器memory barrier只是一个标识，在汇编代码中不会出现</p>
+
+<h2 id="cpu-reorder">CPU reorder</h2>
+
+<p>解决了编译器层面的reorder，还有更加令人头疼的CPU reorder，CPU为了减少指令执行的延迟，会对执行的指令进行reorder</p>
+
+<ul>
+  <li>load load reorder</li>
+  <li>load store reorder</li>
+  <li>store store reorder</li>
+  <li><strong>store load reorder</strong></li>
+</ul>
+
+<p>X86架构下，除了store load reorder其它三种reorder都不会发生</p>
+
+<h3 id="cpu-memory-barrier">CPU memory barrier</h3>
+
+<p><strong>为什么会重排？</strong></p>
+
+<ul>
+  <li>现代编译器的代码优化和编译器指令重排可能会影响到指令的执行顺序</li>
+  <li>指令执行的乱序优化、流水线、乱序执行、分支预测都可能影响到执行顺序</li>
+</ul>
+
+<p>当然，这些重排也会保证不影响语义，可惜的是：<strong>只保证在单核内的正确语义</strong></p>
+
+<p><img src="https://raw.githubusercontent.com/HaHaJeff/HaHaJeff.github.io/master/img/cache_coherence/arch.png" alt="" /></p>
+
+<p><strong>为什么需要CPU memory barrier？</strong></p>
+
+<p>传统的mesi协议中开销最大的两个部分为：</p>
+
+<ul>
+  <li>将某个cache line标记为invalid状态</li>
+  <li>当某个cache line当前状态为invalid时写入新的数据。所以CPU设计者通过添加Store buffer和invalid queue加速这些操作</li>
+</ul>
+
+<p>引入Store buffer和Invalid queue后，读写操作：</p>
+
+<ul>
+  <li>当一个核心在Invalid状态进行写入时，首先会给其它CPU核发送Invalid消息，然后把当前写入的数据写入到Store Buffer中。然后异步在某个时刻真正的写入到Cache Line中。当前CPU核如果要读Cache Line中的数据，需要先扫描Store Buffer之后再读取Cache Line（Store-Buffer Forwarding）。但是此时其它CPU核是看不到当前核的Store Buffer中的数据的，要等到Store Buffer中的数据被刷到了Cache Line之后才会触发失效操作。</li>
+  <li>而当一个CPU核收到Invalid消息时，会把消息写入自身的Invalidate Queue中，随后异步将其设为Invalid状态。和Store Buffer不同的是，当前CPU核心使用Cache时并不扫描Invalidate Queue部分，所以可能会有极短时间的<strong>脏读</strong>问题。这里的Store Buffer和Invalidate Queue的说法是针对一般的SMP架构来说的，不涉及具体架构。</li>
+</ul>
+
+<p><strong>Intel提供了三种内存屏障指令</strong></p>
+
+<ul>
+  <li>sfence，实现Store Barrier，会将store buffer中的数据刷入L1 cache中，使得其他cpu核可以观察到这些修改，而且之后的<strong>写操作</strong>不会提前到sfence之前，即sfence之前的操作一定在sfence完成之前全局可见</li>
+  <li>lfence，实现Load Barrier，会将invalidate queue失效，并读取进L1 cache中，而且之后的读操作不会调度到lfence之前(并未规定全局可见)</li>
+  <li>mfence，实现Full Barrier，同时刷新store buffer和invalidate queue，保证了mfence前后的读写操作顺序，同时要求mfence之后的写操作全局可见之前，mfence之前的写操作全局可见</li>
+</ul>
+
+<p><strong>四种基本的CPU barrier</strong></p>
+
+<ul>
+  <li>LoadLoad Barrier</li>
+  <li>LoadStore Barrier</li>
+  <li>StoreStore Barrier</li>
+  <li>StoreLoad Barrier</li>
+</ul>
+
+<p><strong>更为复杂的Barrier</strong></p>
+
+<ul>
+  <li>Store Barrier(Write Barrier)
+    <ul>
+      <li>所有Store Barrier<strong>之前</strong>的Store操作必须在Store Barrier之前完成，所有Store Barrier<strong>之后</strong>的Store操作必须在Store Barrier之后才能开始</li>
+      <li>Store Barrier只是针对Store操作，对Load操作无效</li>
+    </ul>
+  </li>
+  <li>Load Barrier(Read Barrier)
+    <ul>
+      <li>将Store Barrier的全部功能转换为Load即可</li>
+    </ul>
+  </li>
+  <li>Full Barrier
+    <ul>
+      <li>Load + Store Barrier，Full Barrier两边的任何操作都无法交换</li>
+    </ul>
+  </li>
+</ul>
+
+<h3 id="cpu-memory-barrier使用">CPU Memory Barrier使用</h3>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>#define lfence() __asm__ __volatile__("lfence": : :"memory") 
+#define sfence() __asm__ __volatile__("sfence": : :"memory") 
+#define mfence() __asm__ __volatile__("mfence": : :"memory") 
+</code></pre></div></div>
+
+<hr />
+
+<p>[1] A Primer on Memory Consistency and Cache Coherence</p>
+
+<p>[2] CPU Cache Coherence &amp; Memory Consistency(何登成)</p>
+
+<p>[3] <a href="http://dreamrunner.org/blog/2014/06/28/qian-tan-memory-reordering/">浅谈Memory Reordering</a></p>
+:ET
