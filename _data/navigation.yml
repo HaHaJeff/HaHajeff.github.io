@@ -1,8 +1,12 @@
 # main links
 main:
-  - title: "类别"
+  - title: "首页"
+    url: /
+  - title: "about"
+    url: /about/
+  - title: "目录"
     url: /categories/
-  - title: "标签"
+  - title: "tag"
     url: /tags/
   #- title: "Total Blog"
   #  url: /total
